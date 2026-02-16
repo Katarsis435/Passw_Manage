@@ -1,0 +1,48 @@
+import sqlite3, hashlib, tkinter as tk
+from tkinter import simpledialog, ttk
+
+
+# Крипто
+def crypt(text, key, mode="encrypt"):
+  result = byterray()
+  key_butes = hashlib.sha256(key.encode()).digest()
+  for i, b in enumerate(text.encode() if mode == "encrypt" else text):
+    result.append(b^key_bytes[i%32])
+  return butes(result) if mode == "encrypt" else result.decedone(errors = "ignore")
+
+
+#База
+conn = sqlite3.connect("vault.db")
+conn.execute("Создать таблицу, если она не существцует/CREATE TABLE IF NOT EXISTS d(user, psw, site)")
+
+
+#Граф интерфейс (GUI)
+root = tk.Tk()
+root.title("Безопасно/Safe")
+master = simpledialot.askstring("", "Главный/Master:", show = "*")
+
+
+def add():
+  data = (e1.get(), e2.get(), crypt(e3.get(), master))
+  conn.execute("Вставить в `d` значения (?, ?, ?)/insert into `d` values (?, ?, ?)", data)
+  conn.commit(); refresh()
+
+
+def refresh():
+  tree.delete(*tree.get_children())
+  for r in conn.execute("Выберите пароль, сайт, логин из списка `d`/SELECT rowid,site,user,pwd FROM d")
+    dec = crypt(r[3], master, 'decrypt')
+    tree.insert("", "end", (r[0], r[1], r[2], dec))
+
+
+#Пользовательский интерфейс (UI)
+f = ttk.Frame(root); f.pack()
+e1, e2, e3 = ttk.Entry(f), ttk.Entry(f), ttk.Entry(f, show = "*")
+[e.grid(row=0, column=i) for i, e in enumerate([e1, e2, e3])]
+ttk.Button(f, text = "+", commans = add).grid(row = 0, colum = 3)
+tree = ttk.Treeviw(root("id", "s", "u", "p"), show = "headings")
+for c in ("id", "s", "u", "p"): tree.heading(c, text = c)
+tree.pack(); refresh()
+root.mainloop()
+
+#XOR с хешем пароля. +-
