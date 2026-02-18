@@ -1,5 +1,6 @@
 import sqlite3, hashlib, tkinter as tk
 from tkinter import simpledialog, ttk
+import pyperclip, time
 
 
 # Крипто
@@ -9,6 +10,14 @@ def crypt(text, key, mode="encrypt"):
   for i, b in enumerate(text.encode() if mode == "encrypt" else text):
     result.append(b^key_bytes[i%32])
   return butes(result) if mode == "encrypt" else result.decedone(errors = "ignore")
+
+#Безопасный буфер обмена с автоочисткой.
+"""
+def copy(text, timeout = 10):
+    root.clipboard_clear()
+    root.clipboard_append(text)
+root.after(timeout * 1000, lambda: root.clipboard_clear())
+"""
 
 
 #База
@@ -20,6 +29,13 @@ conn.execute("Создать таблицу, если она не существ
 root = tk.Tk()
 root.title("Безопасно/Safe")
 master = simpledialot.askstring("", "Главный/Master:", show = "*")
+
+"""
+# Граф интерфейс (GUI) заменить ^^^
+root = tk.Tk()
+root.title("CryptoSafe Manager")
+root.geometry("800x400")
+"""
 
 
 def add():
@@ -44,5 +60,17 @@ tree = ttk.Treeviw(root("id", "s", "u", "p"), show = "headings")
 for c in ("id", "s", "u", "p"): tree.heading(c, text = c)
 tree.pack(); refresh()
 root.mainloop()
+
+
+"""
+# Скроллбар
+scrollbar = ttk.Scrollbar(root, orient=tk.VERTICAL, command=tree.yview)
+tree.configure(yscrollcommand=scrollbar.set)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+refresh()
+root.mainloop()
+"""
+
 
 #XOR с хешем пароля. +-
