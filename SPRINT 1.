@@ -32,133 +32,10 @@ def clear_clipboard():
   status_label.config(text="Clipboard cleared")
 
 
-
-
-
-
-
-
-
-
-
-
-#Безопасный буфер обмена с автоочисткой.
-"""
-def copy(text, timeout = 10):
-    root.clipboard_clear()
-    root.clipboard_append(text)
-root.after(timeout * 1000, lambda: root.clipboard_clear())
-"""
-
-
 #База
-conn = sqlite3.connect("vault.db")
-conn.execute("Создать таблицу, если она не существцует/CREATE TABLE IF NOT EXISTS d(user, psw, site)")
-
-
-#Граф интерфейс (GUI)
-root = tk.Tk()
-root.title("Безопасно/Safe")
-master = simpledialot.askstring("", "Главный/Master:", show = "*")
-
-"""
-# Граф интерфейс (GUI) заменить ^^^
-root = tk.Tk()
-root.title("CryptoSafe Manager")
-root.geometry("800x400")
-"""
-
-
-def add():
-  data = (e1.get(), e2.get(), crypt(e3.get(), master))
-  conn.execute("Вставить в `d` значения (?, ?, ?)/insert into `d` values (?, ?, ?)", data)
-  conn.commit(); refresh()
-
-
-def refresh():
-  tree.delete(*tree.get_children())
-  for r in conn.execute("Выберите пароль, сайт, логин из списка `d`/SELECT rowid,site,user,pwd FROM d")
-    dec = crypt(r[3], master, 'decrypt')
-    tree.insert("", "end", (r[0], r[1], r[2], dec))
-
-
-#Пользовательский интерфейс (UI)
-f = ttk.Frame(root); f.pack()
-e1, e2, e3 = ttk.Entry(f), ttk.Entry(f), ttk.Entry(f, show = "*")
-[e.grid(row=0, column=i) for i, e in enumerate([e1, e2, e3])]
-ttk.Button(f, text = "+", commans = add).grid(row = 0, colum = 3)
-tree = ttk.Treeviw(root("id", "s", "u", "p"), show = "headings")
-for c in ("id", "s", "u", "p"): tree.heading(c, text = c)
-tree.pack(); refresh()
-root.mainloop()
-
-
-"""
-# Скроллбар
-scrollbar = ttk.Scrollbar(root, orient=tk.VERTICAL, command=tree.yview)
-tree.configure(yscrollcommand=scrollbar.set)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-refresh()
-root.mainloop()
-"""
-
-
-#XOR с хешем пароля. +-
-
-
-
-
-
-
-
-
-
-
-
-#вариант №2
-"""
-
-import sqlite3, hashlib, tkinter as tk
-from tkinter import simpledialog, ttk
-import os
-import time
-
-# Крипто
-def crypt(text, key, mode="encrypt"):
-    result = bytearray()
-    key_bytes = hashlib.sha256(key.encode()).digest()
-    if mode == "encrypt":
-        data = text.encode()
-    else:
-        data = text
-    
-    for i, b in enumerate(data):
-        result.append(b ^ key_bytes[i % 32])
-    
-    if mode == "encrypt":
-        return bytes(result)
-    else:
-        return bytes(result).decode(errors="ignore")
-
-# Функция для безопасного копирования в буфер обмена (встроенная в tkinter)
-def copy_to_clipboard(text):
-    root.clipboard_clear()
-    root.clipboard_append(text)
-    status_label.config(text="✓ Password copied to clipboard (will clear in 30s)")
-    # Автоочистка через 30 секунд
-    root.after(30000, clear_clipboard)
-
-def clear_clipboard():
-    current = root.clipboard_get()
-    root.clipboard_clear()
-    root.clipboard_append("")
-    status_label.config(text="Clipboard cleared")
-
-# База
 def init_db():
-    conn = sqlite3.connect("vault.db")
-    conn.execute("""
+  conn = sqlite3.connect("vault.db")
+  conn.execute("""
         CREATE TABLE IF NOT EXISTS vault (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT NOT NULL,
@@ -167,110 +44,121 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.execute("""
+  conn.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             action TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.commit()
-    return conn
+  conn.commit()
+  return conn
+conn = infit_db()
 
-conn = init_db()
 
 # Граф интерфейс (GUI)
 root = tk.Tk()
-root.title("CryptoSafe Manager")
+root.title("Менеджер криптобезопасности /// CryptoSafe Manager")
 root.geometry("800x400")
+
 
 # Проверка master пароля при первом запуске
 try:
-    conn.execute("SELECT COUNT(*) FROM vault").fetchone()
-    master = simpledialog.askstring("Master Password", "Enter master password:", show="*")
-    if not master:
-        root.destroy()
-        exit()
-except:
-    master = simpledialog.askstring("Create Master Password", "Create new master password:", show="*")
-    if not master:
-        root.destroy()
-        exit()
+  conn.execute("SELECT COUNT(*) FROM vault").fetchone()
+  master = simpledialog.askstring("Master Password", "Enter master password:", show="*")
+  if not master:
+    root.destroy()
+    exit()
+  except:
+  master = simpledialog.askstring("Create Master Password", "Create new master password:", show="*")
+  if not master:
+    root.destroy()
+    exit()
+
+
+
+
+
+
+
+
 
 def add():
-    if not all([e1.get(), e2.get(), e3.get()]):
-        status_label.config(text=" Please fill all fields")
-        return
-    encrypted_psw = crypt(e3.get(), master)
-    data = (e1.get(), e2.get(), encrypted_psw)
-    conn.execute("INSERT INTO vault (user, site, psw) VALUES (?, ?, ?)", data)
-    conn.execute("INSERT INTO audit_log (action) VALUES (?)", ("add_record",))
-    conn.commit()
-    # Очистка полей ввода
-    e1.delete(0, tk.END)
-    e2.delete(0, tk.END)
-    e3.delete(0, tk.END)
-    status_label.config(text=" Record added successfully")
-    refresh()
+  if not all([e1.get(), e2.get(), e3.get()]):
+    status_label.config(text="Please fill all fields /// Пожалуйста, заполните все поля")
+    return
+  encrypted_psw = crypt(e3.get(), master)  
+  data = (e1.get(), e2.get(),  encrypted_psw)
+  conn.execute("INSERT INTO vault (user, site, psw) VALUES (?, ?, ?)", data)
+  conn.execute("INSERT INTO audit_log (action) VALUES (?)", ("add_record",))
+  conn.commit()
+  # Очистка полей ввода
+  e1.delete(0, tk.END)
+  e2.delete(0, tk.END)
+  e3.delete(0, tk.END)
+  status_label.config(text="Record added successfully /// Запись успешно добавлена")
+  refresh()
 
 def delete():
-    selected = tree.selection()
-    if selected:
-        item = tree.item(selected[0])
-        record_id = item['values'][0]
-        conn.execute("DELETE FROM vault WHERE id=?", (record_id,))
-        conn.execute("INSERT INTO audit_log (action) VALUES (?)", ("delete_record",))
-        conn.commit()
-        status_label.config(text=" Record deleted")
-        refresh()
-    else:
-        status_label.config(text=" Please select a record to delete")
+  selected = tree.selection()
+  if selected:
+    item = tree.item(selected[0])
+    record_id = item['values'][0]
+    conn.execute("DELETE FROM vault WHERE id=?", (record_id,))
+    conn.execute("INSERT INTO audit_log (action) VALUES (?)", ("delete_record",))
+    conn.commit()
+    status_label.config(text="Record deleted /// Запись удалена")
+    refresh()
+  else:
+    status_label.config(text="Please select a record to delete /// Пожалуйста, выберите запись для удаления")
+
 
 def copy_password():
-    selected = tree.selection()
-    if selected:
-        item = tree.item(selected[0])
-        password = item['values'][3]
-        if password != "[encrypted]":
-            copy_to_clipboard(password)
-        else:
-            status_label.config(text=" Cannot copy encrypted password")
+  selected = tree.selection()
+  if selected:
+    item = tree.item(selected[0])
+    password = item['values'][3]
+    if password != "[encrypted]":
+      copy_to_clipboard(password)
     else:
-        status_label.config(text=" Please select a record to copy password")
+      status_label.config(text="Cannot copy encrypted password /// Не удается скопировать зашифрованный пароль")
+  else:
+    status_label.config(text="Please select a record to copy password /// Пожалуйста, выберите запись для копирования пароля")
 
 def refresh():
-    tree.delete(*tree.get_children())
-    cursor = conn.execute("SELECT id, site, user, psw FROM vault ORDER BY site")
-    for row in cursor:
-        try:
-            decrypted = crypt(row[3], master, 'decrypt')
-            tree.insert("", "end", values=(row[0], row[1], row[2], decrypted))
-        except:
-            tree.insert("", "end", values=(row[0], row[1], row[2], "[encrypted]"))
-    status_label.config(text=f" Loaded {len(tree.get_children())} records")
+  tree.delete(*tree.get_children())
+  cursor = conn.execute("SELECT id, site, user, psw FROM vault ORDER BY site")
+  for row in cursor:
+    try:
+      decrypted = crypt(row[3], master, 'decrypt')
+      tree.insert("", "end", values=(row[0], row[1], row[2], decrypted))
+    except:
+      tree.insert("", "end", values=(row[0], row[1], row[2], "[encrypted]"))
+  status_label.config(text=f"Loaded {len(tree.get_children())} records /// Загруженные записи {len(tree.get_children())}")
+
+
+
+
 
 # Пользовательский интерфейс (UI)
 # Верхняя панель с кнопками
 toolbar = ttk.Frame(root)
 toolbar.pack(fill=tk.X, padx=5, pady=5)
+ttk.Button(toolbar, text="Add", command=add).pack(side=tk.LEFT, padx=2)
+ttk.Button(toolbar, text="Delete", command=delete).pack(side=tk.LEFT, padx=2)
+ttk.Button(toolbar, text="Copy Password", command=copy_password).pack(side=tk.LEFT, padx=2)
+ttk.Button(toolbar, text="Refresh", command=refresh).pack(side=tk.LEFT, padx=2)
 
-ttk.Button(toolbar, text=" Add", command=add).pack(side=tk.LEFT, padx=2)
-ttk.Button(toolbar, text=" Delete", command=delete).pack(side=tk.LEFT, padx=2)
-ttk.Button(toolbar, text=" Copy Password", command=copy_password).pack(side=tk.LEFT, padx=2)
-ttk.Button(toolbar, text=" Refresh", command=refresh).pack(side=tk.LEFT, padx=2)
-
-# Форма ввода
+ Форма ввода
 f = ttk.LabelFrame(root, text="➕ New Record")
 f.pack(fill=tk.X, padx=5, pady=5)
 
 # Создаем фрейм для полей ввода
 input_frame = ttk.Frame(f)
 input_frame.pack(fill=tk.X, padx=5, pady=5)
-
 e1 = ttk.Entry(input_frame, width=20)
 e2 = ttk.Entry(input_frame, width=20)
 e3 = ttk.Entry(input_frame, width=20, show="*")
-
 ttk.Label(input_frame, text="Username:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 e1.grid(row=0, column=1, padx=5, pady=5)
 ttk.Label(input_frame, text="Site:").grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
@@ -278,36 +166,37 @@ e2.grid(row=0, column=3, padx=5, pady=5)
 ttk.Label(input_frame, text="Password:").grid(row=0, column=4, padx=5, pady=5, sticky=tk.W)
 e3.grid(row=0, column=5, padx=5, pady=5)
 
+
+
 # Таблица
 tree_frame = ttk.Frame(root)
 tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
 tree_scroll = ttk.Scrollbar(tree_frame)
 tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-
-tree = ttk.Treeview(tree_frame, columns=("id", "site", "user", "password"), 
+tree = ttk.Treeview(tree_frame, columns=("id", "site", "user", "password"),
                     show="headings", yscrollcommand=tree_scroll.set)
 tree_scroll.config(command=tree.yview)
-
 tree.heading("id", text="ID")
 tree.heading("site", text="Site")
 tree.heading("user", text="Username")
 tree.heading("password", text="Password")
-
 tree.column("id", width=50)
 tree.column("site", width=200)
 tree.column("user", width=200)
 tree.column("password", width=200)
-
 tree.pack(fill=tk.BOTH, expand=True)
+
+
 
 # Статус бар
 status_label = ttk.Label(root, text="Ready", relief=tk.SUNKEN, anchor=tk.W)
 status_label.pack(side=tk.BOTTOM, fill=tk.X)
-
 refresh()
 root.mainloop()
 
 
 
-"""
+#XOR с хешем пароля. +-
+
+
+
