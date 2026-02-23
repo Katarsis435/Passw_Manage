@@ -1,17 +1,46 @@
 import sqlite3, hashlib, tkinter as tk
 from tkinter import simpledialog, ttk
-import pyperclip, time
 
 
 # Крипто
 def crypt(text, key, mode="encrypt"):
   result = byterray()
   key_butes = hashlib.sha256(key.encode()).digest()
-
+  if mode == "encrypt":
+    data = text.encode()
+  else:
+    data = text
   for i, b in enumerate(data):
         result.append(b ^ key_bytes[i % 32])
+  if mode == "encrypt":
+    return bytes(result)
+  else:
+    return bytes(result).decode(errors="ignore")
 
-  return butes(result) if mode == "encrypt" else result.decedone(errors = "ignore")
+
+
+def copy_to_clipboard(text):
+  root.clipboard_clear()
+  root.clipboard_append(text)
+  status_label.config(text="Password copied to clipboard (will clear in 30s) /// Пароль скопирован в буфер обмена (будет удален через 30 секунд)")
+  root.after(30000, clear_clipboard)
+
+def clear_clipboard():
+  current = root.clipboard_get()
+  root.clipboard_clear()
+  root.clipboard_append("")
+  status_label.config(text="Clipboard cleared")
+
+
+
+
+
+
+
+
+
+
+
 
 #Безопасный буфер обмена с автоочисткой.
 """
