@@ -127,3 +127,46 @@ SPRINT 1.
 - **Secure Memory:** Sensitive data zeroed after use.
 - **Clipboard Isolation:** Use private clipboard where possible (Linux/macOS).
 - **No Network:** Entirely local unless bonus cloud sync added.
+
+
+--------------- 
+Пример модульной структуры:
+
+cryptosafe-manager/
+├── src/
+│   ├── core/
+│   │   ├── crypto/
+│   │   │   ├── abstract.py       # EncryptionService
+│   │   │   └── placeholder.py    # AES256Placeholder (заглушка)
+│   │   ├── events.py             # Система событий
+│   │   ├── config.py             # Конфигурация
+│   │   └── state_manager.py      # Управление состоянием
+│   ├── database/
+│   │   ├── models.py             # Модели SQLAlchemy или обычные SQL-модели
+│   │   └── db.py                 # Помощник БД
+│   └── gui/
+│       ├── main_window.py        # Основной UI
+│       └── widgets/              # Переиспользуемые компоненты
+├── tests/
+│   ├── test_crypto.py
+│   └── test_database.py
+├── README.md
+├── requirements.txt
+└── .github/workflows/tests.yml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
