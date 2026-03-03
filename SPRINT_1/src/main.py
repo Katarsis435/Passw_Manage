@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
 import sys
-from PyQt5.QtWidgets import QApplication
+from pathlib import Path
+
+# Добавляем путь к проекту
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.gui.main_window import MainWindow
 
-
 def main():
-  app = QApplication(sys.argv)
-  app.setApplicationName("CryptoSafe Manager")
+    window = MainWindow()
+    window.run()  # Было window.show(), а нужно window.run()
 
-  window = MainWindow()
-  window.show()
-
-  sys.exit(app.exec_())
-
-
-if __name__ == "__main__":
-  main()
+if __name__ == '__main__':
+    main()

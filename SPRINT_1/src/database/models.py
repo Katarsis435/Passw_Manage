@@ -1,46 +1,40 @@
-def init_db(conn):
-  conn.execute('''
-      CREATE TABLE IF NOT EXISTS vault_entries (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          username TEXT,
-          encrypted_password BLOB,
-          url TEXT,
-          notes TEXT,
-          created_at TIMESTAMP,
-          updated_at TIMESTAMP,
-          tags TEXT
-      )
-  ''')
+import sqlite3
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
 
-  conn.execute('''
-      CREATE TABLE IF NOT EXISTS audit_log (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          action TEXT,
-          timestamp TIMESTAMP,
-          entry_id INTEGER,
-          details TEXT,
-          signature TEXT
-      )
-  ''')
+@dataclass
+class VaultEntry:
+    id: Optional[int] = None
+    title: str = ''
+    username: str = ''
+    encrypted_password: bytes = b''
+    url: str = ''
+    notes: str = ''
+    tags: str = ''
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
-  conn.execute('''
-      CREATE TABLE IF NOT EXISTS settings (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          setting_key TEXT UNIQUE,
-          setting_value TEXT,
-          encrypted BOOLEAN
-      )
-  ''')
+@dataclass
+class AuditLog:
+    id: Optional[int] = None
+    action: str = ''
+    timestamp: Optional[str] = None
+    entry_id: Optional[int] = None
+    details: str = ''
+    signature: str = ''  # Заглушка для спринта 5
 
-  conn.execute('''
-      CREATE TABLE IF NOT EXISTS key_store (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          key_type TEXT,
-          salt BLOB,
-          hash BLOB,
-          params TEXT
-      )
-  ''')
+@dataclass
+class Setting:
+    id: Optional[int] = None
+    setting_key: str = ''
+    setting_value: str = ''
+    encrypted: bool = False
 
-  conn.execute('PRAGMA user_version = 1')
+@dataclass
+class KeyStore:
+    id: Optional[int] = None
+    key_type: str = ''
+    salt: bytes = b''
+    hash: bytes = b''
+    params: str = ''

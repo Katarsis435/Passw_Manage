@@ -1,16 +1,27 @@
-import hashlib
 import os
-import ctypes
+import secrets
+from typing import Optional
 
 
 class KeyManager:
-  @staticmethod
-  def derive_key(password: str, salt: bytes = None) -> tuple[bytes, bytes]:
-    if salt is None:
-      salt = os.urandom(16)
-    key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-    return key, salt
+  def __init__(self):
+    self.current_key: Optional[bytes] = None
 
-  @staticmethod
-  def secure_zero(data: bytearray):
-    ctypes.memset(ctypes.addressof(ctypes.c_char.from_buffer(data)), 0, len(data))
+  def derive_key(self, password: str, salt: bytes) -> bytes:
+    # Простая заглушка
+    key = password.encode() + salt
+    return key[:32]  # Обрезаем до 32 байт
+
+  def generate_salt(self) -> bytes:
+    return secrets.token_bytes(16)
+
+  def store_key(self, key_id: str, key: bytes) -> None:
+    # Заглушка для БД
+    self.current_key = key
+
+  def load_key(self, key_id: str) -> Optional[bytes]:
+    return self.current_key
+
+  def secure_wipe(self, data: bytearray) -> None:
+    for i in range(len(data)):
+      data[i] = 0

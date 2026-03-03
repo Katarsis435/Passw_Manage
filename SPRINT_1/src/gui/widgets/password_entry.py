@@ -1,33 +1,31 @@
-from PyQt5.QtWidgets import QWidget, QLineEdit, QPushButton, QHBoxLayout
+import tkinter as tk
+from tkinter import ttk
 
 
-class PasswordEntry(QWidget):
-  def __init__(self, parent=None):
+class PasswordEntry(ttk.Frame):
+  def __init__(self, parent, **kwargs):
     super().__init__(parent)
-    layout = QHBoxLayout()
-    layout.setContentsMargins(0, 0, 0, 0)
 
-    self.password_field = QLineEdit()
-    self.password_field.setEchoMode(QLineEdit.Password)
+    self.show_password = tk.BooleanVar(value=False)
 
-    self.toggle_btn = QPushButton("Show")
-    self.toggle_btn.setCheckable(True)
-    self.toggle_btn.toggled.connect(self.toggle_visibility)
+    self.entry = ttk.Entry(self, show='*', **kwargs)
+    self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-    layout.addWidget(self.password_field)
-    layout.addWidget(self.toggle_btn)
-    self.setLayout(layout)
+    self.btn_show = ttk.Button(
+      self,
+      text='👁',
+      width=3,
+      command=self.toggle_show
+    )
+    self.btn_show.pack(side=tk.RIGHT)
 
-  def toggle_visibility(self, checked):
-    if checked:
-      self.password_field.setEchoMode(QLineEdit.Normal)
-      self.toggle_btn.setText("Hide")
-    else:
-      self.password_field.setEchoMode(QLineEdit.Password)
-      self.toggle_btn.setText("Show")
+  def toggle_show(self):
+    self.show_password.set(not self.show_password.get())
+    self.entry.config(show='' if self.show_password.get() else '*')
 
-  def text(self):
-    return self.password_field.text()
+  def get(self):
+    return self.entry.get()
 
-  def setText(self, text):
-    self.password_field.setText(text)
+  def set(self, value):
+    self.entry.delete(0, tk.END)
+    self.entry.insert(0, value)

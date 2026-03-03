@@ -1,39 +1,42 @@
+import os
 import json
 from pathlib import Path
 
 
 class Config:
-  def __init__(self):
-    self.config_dir = Path.home() / '.cryptosafe'
-    self.config_file = self.config_dir / 'config.json'
-    self._ensure_config_dir()
-    self.settings = self._load_defaults()
+  def __init__(self, env: str = 'development'):
+    self.env = env
+    self.data_dir = Path.home() / '.cryptosafe'
+    self.data_dir.mkdir(exist_ok=True)
 
-  def _ensure_config_dir(self):
-    self.config_dir.mkdir(exist_ok=True)
+    self.db_path = self.data_dir / 'vault.db'
+    self.settings_file = self.data_dir / 'settings.json'
 
-  def _load_defaults(self):
-    defaults = {
-      'db_path': str(self.config_dir / 'vault.db'),
-      'encryption': 'placeholder',
+    # Настройки по умолчанию
+    self.settings = {
       'clipboard_timeout': 30,
-      'auto_lock': 5,
-      'theme': 'default'
+      'auto_lock_minutes': 5,
+      'theme': 'default',
+      'language': 'ru'
     }
 
-    if self.config_file.exists():
-      with open(self.config_file) as f:
-        defaults.update(json.load(f))
+    self.load()
 
-    return defaults
+  def load(self):
+    if self.settings_file.exists():
+      try:
+        with open(self.settings_file, 'r') as f:
+          self.settings.update(json.load(f))
+      except:
+        pass
 
   def save(self):
-    with open(self.config_file, 'w') as f:
+    with open(self.settings_file, 'w') as f:
       json.dump(self.settings, f, indent=2)
 
-  def get(self, key, default=None):
+  def get(self, key: str, default=None):
     return self.settings.get(key, default)
 
-  def set(self, key, value):
+  def set(self, key: str, value):
     self.settings[key] = value
     self.save()
