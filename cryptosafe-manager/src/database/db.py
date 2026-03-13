@@ -193,3 +193,27 @@ class Database:
       return True
     except:
       return False
+
+
+def update_setting_field(self, setting_key: str, field_name: str, field_value: Any) -> bool:
+  allowed_fields = ['setting_value', 'encrypted', 'description', 'category', 'data_type', 'is_editable']
+  if field_name not in allowed_fields:
+    logger.error(f"Field {field_name} not allowed for update")
+    return False
+  with self.cursor() as c:
+    c.execute("SELECT id FROM settings WHERE setting_key = ?", (setting_key,))
+    row = c.fetchone()
+    if row:
+      if field_name == 'setting_value':
+        field_value = json.dumps(field_value)
+      c.execute(f"""
+                UPDATE settings 
+                SET {field_name} = ? 
+                WHERE setting_key = ?
+            """, (field_value, setting_key))
+      logger.info(f"Updated {field_name} for {setting_key}")
+      return c.rowcount > 0
+    else:
+      logger.error(f"Setting {setting_key} not found")
+      return False
+  
