@@ -92,7 +92,6 @@ cryptosafe-manager/
 ├── Dockerfile                    # Container stub (Sprint 8)
 └── README.md                     # This file
 ```
-
 # Технологии
 Python 3.8+
 SQLite (встроенная БД)
