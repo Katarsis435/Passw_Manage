@@ -1,17 +1,15 @@
-# CryptoSafe Manager Dependencies
+# src/core/crypto/abstract.py
+from abc import ABC, abstractmethod
 
-# Core dependencies
-argon2-cffi>=23.1.0
-cryptography>=41.0.0
+class EncryptionService(ABC):
+    """Abstract base class for encryption services"""
 
-# Optional keychain integration
-keyring>=24.0.0
+    @abstractmethod
+    def encrypt(self, data: bytes, key: bytes) -> bytes:
+        """Encrypt data with given key"""
+        pass
 
-# For future features
-pyperclip>=1.8.2
-qrcode>=7.4.2
-Pillow>=10.0.0
-
-# For testing
-pytest>=7.4.0
-pytest-cov>=4.1.0
+    @abstractmethod
+    def decrypt(self, ciphertext: bytes, key: bytes) -> bytes:
+        """Decrypt ciphertext with given key"""
+        pass
