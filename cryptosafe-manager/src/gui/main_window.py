@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 from datetime import datetime
 
-from src.core.events import events, EventType
+from cryptosafe_manager.src.core.events import events, EventType
 from src.core.state_manager import StateManager
 from src.core.config import Config
 from src.database.db import Database
@@ -17,28 +17,23 @@ from src.gui.widgets.audit_log_viewer import AuditLogViewer
 
 class MainWindow:
   """Main application window"""
-
   def __init__(self, config: Config, db: Database):
     self.config = config
     self.db = db
     self.state = StateManager()
     self.crypto = AES256Placeholder()
     self.key_manager = KeyManager()
-
     # Create main window
     self.root = tk.Tk()
     self.root.title("CryptoSafe Manager")
     self.root.geometry("900x600")
-
     # Setup UI
     self._create_menu()
     self._create_toolbar()
     self._create_main_content()
     self._create_statusbar()
-
     # Bind events
     self._setup_events()
-
     # Check if first run
     self._check_first_run()
 
@@ -46,7 +41,6 @@ class MainWindow:
     """Create menu bar"""
     menubar = tk.Menu(self.root)
     self.root.config(menu=menubar)
-
     # File menu
     file_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="File", menu=file_menu)
@@ -56,20 +50,17 @@ class MainWindow:
     file_menu.add_command(label="Backup", command=self._backup_vault)
     file_menu.add_separator()
     file_menu.add_command(label="Exit", command=self.root.quit)
-
     # Edit menu
     edit_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Edit", menu=edit_menu)
     edit_menu.add_command(label="Add Entry", command=self._add_entry)
     edit_menu.add_command(label="Edit Entry", command=self._edit_entry)
     edit_menu.add_command(label="Delete Entry", command=self._delete_entry)
-
     # View menu
     view_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="View", menu=view_menu)
     view_menu.add_command(label="Audit Logs", command=self._show_audit_logs)
     view_menu.add_command(label="Settings", command=self._show_settings)
-
     # Help menu
     help_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Help", menu=help_menu)
@@ -79,7 +70,6 @@ class MainWindow:
     """Create toolbar"""
     toolbar = ttk.Frame(self.root)
     toolbar.pack(side=tk.TOP, fill=tk.X)
-
     ttk.Button(toolbar, text="Add", command=self._add_entry).pack(side=tk.LEFT, padx=2)
     ttk.Button(toolbar, text="Edit", command=self._edit_entry).pack(side=tk.LEFT, padx=2)
     ttk.Button(toolbar, text="Delete", command=self._delete_entry).pack(side=tk.LEFT, padx=2)
@@ -91,31 +81,23 @@ class MainWindow:
     # Paned window for resizable sections
     paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
     paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
     # Left frame for vault entries
     left_frame = ttk.Frame(paned)
     paned.add(left_frame, weight=3)
-
     ttk.Label(left_frame, text="Vault Entries", font=('Arial', 12, 'bold')).pack(anchor=tk.W)
-
     # Secure table
     self.table = SecureTable(left_frame)
     self.table.pack(fill=tk.BOTH, expand=True, pady=5)
-
     # Right frame for details/audit
     right_frame = ttk.Frame(paned)
     paned.add(right_frame, weight=1)
-
     self.notebook = ttk.Notebook(right_frame)
     self.notebook.pack(fill=tk.BOTH, expand=True)
-
     # Details tab
     details_frame = ttk.Frame(self.notebook)
     self.notebook.add(details_frame, text="Details")
-
     self.details_text = tk.Text(details_frame, wrap=tk.WORD, height=10)
     self.details_text.pack(fill=tk.BOTH, expand=True)
-
     # Audit log viewer (stub)
     self.audit_viewer = AuditLogViewer(self.notebook, height=10)
     self.notebook.add(self.audit_viewer, text="Audit Log")
@@ -124,14 +106,11 @@ class MainWindow:
     """Create status bar"""
     self.statusbar = ttk.Frame(self.root)
     self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
-
     self.status_label = ttk.Label(self.statusbar, text="Ready", relief=tk.SUNKEN)
     self.status_label.pack(side=tk.LEFT, padx=5)
-
-    self.lock_label = ttk.Label(self.statusbar, text="🔒 Locked", relief=tk.SUNKEN)
+    self.lock_label = ttk.Label(self.statusbar, text="Locked", relief=tk.SUNKEN)
     self.lock_label.pack(side=tk.RIGHT, padx=5)
-
-    self.clipboard_label = ttk.Label(self.statusbar, text="📋 Clipboard: --", relief=tk.SUNKEN)
+    self.clipboard_label = ttk.Label(self.statusbar, text="Clipboard: --", relief=tk.SUNKEN)
     self.clipboard_label.pack(side=tk.RIGHT, padx=5)
 
   def _setup_events(self):
@@ -251,20 +230,19 @@ class MainWindow:
         'url': entry['url'] or '',
         'updated_at': entry['updated_at'][:10] if entry['updated_at'] else ''
       })
-
     self.table.set_data(table_data)
 
   def _unlock_vault(self):
     """Unlock the vault"""
     self.state.unlock()
-    self.lock_label.config(text="🔓 Unlocked")
+    self.lock_label.config(text="Unlocked")
     self._load_vault_data()
     events.publish(EventType.USER_LOGGED_IN, {"user": "user"})
 
   def _lock_vault(self):
     """Lock the vault"""
     self.state.lock()
-    self.lock_label.config(text="🔒 Locked")
+    self.lock_label.config(text="Locked")
     self.table.set_data([])
     events.publish(EventType.USER_LOGGED_OUT)
 
@@ -278,7 +256,6 @@ class MainWindow:
     dialog.title("Add Entry")
     dialog.geometry("400x350")
     dialog.transient(self.root)
-
     # Create form
     fields = {}
     row = 0
@@ -298,9 +275,7 @@ class MainWindow:
         entry = ttk.Entry(dialog)
         entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=2)
         fields[field.lower()] = entry
-
       row += 1
-
     dialog.grid_columnconfigure(1, weight=1)
 
     def save():
@@ -322,7 +297,6 @@ class MainWindow:
 
       # Save to database
       entry_id = self.db.add_entry(title, username, encrypted, url, notes, tags)
-
       dialog.destroy()
 
       # Publish event
@@ -331,10 +305,8 @@ class MainWindow:
         'title': title,
         'action': 'added'
       })
-
       # Reload data
       self._load_vault_data()
-
     ttk.Button(dialog, text="Save", command=save).grid(row=row, column=0, columnspan=2, pady=10)
 
   def _edit_entry(self):
@@ -347,7 +319,6 @@ class MainWindow:
     if not selected_id:
       messagebox.showinfo("Info", "Please select an entry to edit")
       return
-
     messagebox.showinfo("Info", "Edit functionality - Sprint 2 implementation")
 
   def _delete_entry(self):
@@ -363,7 +334,6 @@ class MainWindow:
 
     if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this entry?"):
       self.db.delete_entry(int(selected_id))
-
       # Publish event
       events.publish(EventType.ENTRY_DELETED, {
         'id': int(selected_id),
@@ -435,36 +405,28 @@ class MainWindow:
     dialog.title("Settings")
     dialog.geometry("500x400")
     dialog.transient(self.root)
-
     notebook = ttk.Notebook(dialog)
     notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
     # Security tab
     security_frame = ttk.Frame(notebook)
     notebook.add(security_frame, text="Security")
-
     ttk.Label(security_frame, text="Clipboard timeout (seconds):").pack(anchor=tk.W, pady=5)
     timeout_var = tk.StringVar(value=str(self.config.get("clipboard_timeout", 30)))
     ttk.Entry(security_frame, textvariable=timeout_var).pack(fill=tk.X)
-
     ttk.Label(security_frame, text="Auto-lock (minutes):").pack(anchor=tk.W, pady=5)
     lock_var = tk.StringVar(value=str(self.config.get("auto_lock_minutes", 5)))
     ttk.Entry(security_frame, textvariable=lock_var).pack(fill=tk.X)
-
     # Appearance tab
     appearance_frame = ttk.Frame(notebook)
     notebook.add(appearance_frame, text="Appearance")
-
     ttk.Label(appearance_frame, text="Theme:").pack(anchor=tk.W, pady=5)
     theme_var = tk.StringVar(value=self.config.get("theme", "default"))
     ttk.Combobox(appearance_frame, textvariable=theme_var,
                  values=["default", "dark", "light"]).pack(fill=tk.X)
-
     ttk.Label(appearance_frame, text="Language:").pack(anchor=tk.W, pady=5)
     lang_var = tk.StringVar(value=self.config.get("language", "en"))
     ttk.Combobox(appearance_frame, textvariable=lang_var,
                  values=["en", "es", "fr", "de"]).pack(fill=tk.X)
-
     # Advanced tab
     advanced_frame = ttk.Frame(notebook)
     notebook.add(advanced_frame, text="Advanced")
@@ -487,17 +449,17 @@ class MainWindow:
   def _show_about(self):
     """Show about dialog"""
     about_text = """CryptoSafe Manager
-Version: Sprint 1
-A secure password manager with audit logging and encryption.
+Версия: Sprint 1
+Надежный менеджер паролей с протоколированием аудита и шифрованием.
 
-Sprint 1 Features:
-- Secure database foundation
-- Encryption placeholder
-- Basic GUI shell
-- Event system
-- Configuration management
+Функции Sprint 1:
+-Основа защищенной базы данных
+-Заполнитель для шифрования
+-Базовая оболочка GUI
+-Система событий
+-Управление конфигурацией
 
-Sprints 2-8 coming soon!"""
+Позже появятся спринты 2-8."""
 
     messagebox.showinfo("About", about_text)
 
