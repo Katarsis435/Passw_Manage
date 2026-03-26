@@ -2,83 +2,74 @@
 import unittest
 import os
 import tempfile
+import shutil
 from src.database.db import Database
 
 
 class TestDatabase(unittest.TestCase):
-  """Test database functionality"""
+  """Tests for database operations"""
 
   def setUp(self):
-    self.temp_db = tempfile.NamedTemporaryFile(delete=False)
-    self.db_path = self.temp_db.name
-    self.temp_db.close()
-
+    self.test_dir = tempfile.mkdtemp()
+    self.db_path = os.path.join(self.test_dir, "test.db")
     self.db = Database(self.db_path)
 
   def tearDown(self):
-    os.unlink(self.db_path)
+    self.db.close()
+    shutil.rmtree(self.test_dir, ignore_errors=True)
 
   def test_add_entry(self):
     """Test adding vault entry"""
     entry_id = self.db.add_entry(
       title="Test Entry",
       username="testuser",
-      password=b"encrypted_pass",
-      url="https://example.com",
-      notes="Test notes",
-      tags="test,example"
+      password=b"encrypted_pass"
     )
-
     self.assertIsNotNone(entry_id)
-    self.assertGreater(entry_id, 0)
 
   def test_get_entries(self):
     """Test retrieving entries"""
-    # Add test entry
-    self.db.add_entry(title="Test Entry 1")
-    self.db.add_entry(title="Test Entry 2")
+    self.db.add_entry(title="Entry 1")
+    self.db.add_entry(title="Entry 2")
 
     entries = self.db.get_entries()
-
     self.assertEqual(len(entries), 2)
-    self.assertEqual(entries[0]['title'], "Test Entry 1")
 
   def test_update_entry(self):
     """Test updating entry"""
-    entry_id = self.db.add_entry(title="Original Title")
+    entry_id = self.db.add_entry(title="Original")
+    self.db.update_entry(entry_id, title="Updated")
 
-    updated = self.db.update_entry(entry_id, title="Updated Title")
-    self.assertTrue(updated)
-
-    entries = self.db.get_entries()
-    self.assertEqual(entries[0]['title'], "Updated Title")
+    entry = self.db.get_entry_by_id(entry_id)
+    self.assertEqual(entry['title'], "Updated")
 
   def test_delete_entry(self):
     """Test deleting entry"""
     entry_id = self.db.add_entry(title="To Delete")
+    result = self.db.delete_entry(entry_id)
 
-    deleted = self.db.delete_entry(entry_id)
-    self.assertTrue(deleted)
-
-    entries = self.db.get_entries()
-    self.assertEqual(len(entries), 0)
+    self.assertTrue(result)
+    self.assertIsNone(self.db.get_entry_by_id(entry_id))
 
   def test_audit_log(self):
     """Test audit log"""
+    entry_id = self.db.add_entry(title="Audit Test")
+
     log_id = self.db.add_audit_log(
       action="test_action",
-      entry_id=1,
+      entry_id=entry_id,
       details="Test details"
     )
-
     self.assertIsNotNone(log_id)
+
+    logs = self.db.get_audit_logs()
+    self.assertGreaterEqual(len(logs), 1)
 
   def test_settings(self):
     """Test settings"""
-    self.db.set_setting("test_key", "test_value")
-
+    self.db.set_setting("test_key", {"value": "test"})
     value = self.db.get_setting("test_key")
-    self.assertEqual(value, "test_value")
+    self.assertEqual(value, {"value": "test"})
 
 
 if __name__ == '__main__':

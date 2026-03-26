@@ -88,19 +88,19 @@ class KeyManager:
         return kdf.derive(password.encode('utf-8'))
 
     def verify_password(self, password: str, stored_hash: str) -> bool:
-        """Verify password against stored Argon2 hash (constant-time)"""
-        if not self._crypto_available:
-            # Fallback for testing
-            computed = hashlib.sha256(password.encode()).hexdigest()
-            return secrets.compare_digest(computed, stored_hash)
+      """Verify password against stored Argon2 hash (constant-time)"""
+      if not self._crypto_available:
+        # Fallback for testing
+        computed = hashlib.sha256(password.encode()).hexdigest()
+        return secrets.compare_digest(computed, stored_hash)
 
-        try:
-            self.argon2_hasher.verify(stored_hash, password)
-            return True
-        except:
-            # Constant-time dummy verification to prevent timing attacks
-            secrets.compare_digest(b'dummy', b'dummy')
-            return False
+      try:
+        # This will raise exception if verification fails
+        self.argon2_hasher.verify(stored_hash, password)
+        return True
+      except Exception:
+        # Verification failed
+        return False
 
     def store_key(self, key_id: str, key: bytes) -> None:
         """Store key in memory cache"""

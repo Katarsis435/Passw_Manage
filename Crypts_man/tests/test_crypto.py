@@ -6,7 +6,7 @@ from src.core.key_manager import KeyManager
 
 
 class TestCrypto(unittest.TestCase):
-  """Test cryptographic functionality"""
+  """Tests for cryptographic operations"""
 
   def setUp(self):
     self.crypto = AES256Placeholder()
@@ -14,12 +14,13 @@ class TestCrypto(unittest.TestCase):
 
   def test_encrypt_decrypt(self):
     """Test encryption and decryption"""
-    key = b"0" * 32
-    data = b"Secret password 123"
+    key = os.urandom(32)
+    data = b"Secret password 123!"
 
     encrypted = self.crypto.encrypt(data, key)
     decrypted = self.crypto.decrypt(encrypted, key)
 
+    self.assertNotEqual(data, encrypted)
     self.assertEqual(data, decrypted)
 
   def test_key_derivation(self):
@@ -27,15 +28,20 @@ class TestCrypto(unittest.TestCase):
     password = "test_password"
     salt = os.urandom(16)
 
-    key1 = self.key_manager.derive_key(password, salt)
-    key2 = self.key_manager.derive_key(password, salt)
+    # Используем правильный метод
+    key = self.key_manager.derive_encryption_key(password, salt)
 
-    self.assertEqual(key1, key2)
+    self.assertEqual(len(key), 32)
+    self.assertIsInstance(key, bytes)
 
-    # Different salt should produce different key
+    # Проверяем что одинаковые пароли дают одинаковый ключ
+    key2 = self.key_manager.derive_encryption_key(password, salt)
+    self.assertEqual(key, key2)
+
+    # Разные соли дают разные ключи
     salt2 = os.urandom(16)
-    key3 = self.key_manager.derive_key(password, salt2)
-    self.assertNotEqual(key1, key3)
+    key3 = self.key_manager.derive_encryption_key(password, salt2)
+    self.assertNotEqual(key, key3)
 
 
 if __name__ == '__main__':
