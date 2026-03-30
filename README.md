@@ -66,30 +66,41 @@ cryptosafe-manager/
 ├── src/
 │   ├── core/
 │   │   ├── crypto/
+│   │   │   ├── __init__.py
 │   │   │   ├── abstract.py       # EncryptionService abstract class
 │   │   │   └── placeholder.py    # AES256Placeholder (XOR)
+│   │   ├── __init__.py
 │   │   ├── events.py             # Event system
 │   │   ├── config.py             # Configuration manager
 │   │   ├── key_manager.py        # Key management stub
 │   │   └── state_manager.py      # State tracking
 │   ├── database/
+│   │   ├── __init__.py
 │   │   ├── db.py                 # Database helper with migrations
 │   │   └── models.py             # (Future: SQLAlchemy models)
 │   └── gui/
 │       ├── main_window.py        # Main application window
+│       ├── __init__.py
 │       └── widgets/
+│           ├── __init__.py
 │           ├── password_entry.py # Password input with show/hide
 │           ├── secure_table.py   # Vault entries table
 │           └── audit_log_viewer.py # Audit log viewer stub
 ├── tests/
+│   ├── __init__.py
 │   ├── test_crypto.py            # Crypto unit tests
 │   ├── test_database.py          # Database unit tests
+│   ├── test_config.py            # SPR_2
+│   ├── test_db.py                # SPR_2
 │   ├── test_events.py            # Event system tests
-│   └── test_integration.py       # Integration tests
-│   └── test_tkinter.py 
+│   ├── test_integration.py       # Integration tests
+│   ├── test_key_derivation.py    # SPR_2
+│   ├── test_widgers.py           # SPR_2
+│   └── test_tkinter.py           # SPR_2
 ├── .github/
 │   └── workflows/
 │       └── tests.yml             # GitHub Actions CI
+├── __init__.py
 ├── main.py                       # Entry point
 ├── requirements.txt              # Dependencies
 ├── Dockerfile                    # Container stub (Sprint 8)
