@@ -169,6 +169,7 @@ class TestAuthenticationManager(unittest.TestCase):
     self.assertGreater(self.auth_manager.get_failed_attempts(), 0)
 
     # Успешный вход
+    time.sleep(5)
     result = self.auth_manager.authenticate(self.test_password, stored_hash, self.test_salt)
 
     # Проверяем что вернулся ключ
