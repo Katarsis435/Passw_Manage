@@ -5,16 +5,17 @@ import os
 import time
 from datetime import datetime
 
-from src.core.events import events, EventType
-from src.core.state_manager import StateManager
-from src.core.config import Config
-from src.database.db import Database
-from src.core.crypto.placeholder import AES256Placeholder
-from src.core.key_manager import KeyManager
-from src.core.authentication import AuthenticationManager
-from src.gui.widgets.password_entry import PasswordEntry
-from src.gui.widgets.secure_table import SecureTable
-from src.gui.widgets.audit_log_viewer import AuditLogViewer
+from Crypts_man.src.core.events import events, EventType
+from Crypts_man.src.core.state_manager import StateManager
+from Crypts_man.src.core.config import Config
+from Crypts_man.src.database.db import Database
+from Crypts_man.src.core.crypto.placeholder import AES256Placeholder
+from Crypts_man.src.core.key_manager import KeyManager
+from Crypts_man.src.core.authentication import AuthenticationManager
+from Crypts_man.src.gui.widgets.password_entry import PasswordEntry
+from Crypts_man.src.gui.widgets.secure_table import SecureTable
+from Crypts_man.src.gui.widgets.audit_log_viewer import AuditLogViewer
+
 
 
 class MainWindow:
