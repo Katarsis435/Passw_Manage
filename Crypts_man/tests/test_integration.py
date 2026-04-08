@@ -1,4 +1,5 @@
 # tests/test_integration.py
+import time
 import unittest
 import os
 import tempfile
@@ -112,7 +113,7 @@ class TestIntegrationSprint2(unittest.TestCase):
 
     # Simulate password change
     # 1. Verify old password and get old key
-  
+
    # old_auth_hash = self.db.get_auth_hash()
     # old_salt_data = self.db.get_encryption_salt()
 
@@ -183,7 +184,7 @@ class TestIntegrationSprint2(unittest.TestCase):
     self.assertIsNone(result)
     self.assertGreaterEqual(self.auth_manager.get_failed_attempts(), 1)
     time.sleep(5)
-
+    time.sleep(5)
     # Успешный вход
     result = self.auth_manager.authenticate(
       self.test_password,

@@ -1,7 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="e53a0be2-a78f-408d-9805-6e8bce09011b" name="Changes" comment="" />
+    <list default="true" id="e53a0be2-a78f-408d-9805-6e8bce09011b" name="Changes" comment="3spr">
+      <change afterPath="$PROJECT_DIR$/Crypts_man/src/core/vault/password_generator.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Crypts_man/src/gui/dialogs/password_generator_dialog.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/requirements" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/requirements" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/core/vault/encryption_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/core/vault/encryption_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/core/vault/entry_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/core/vault/entry_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/database/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/database/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/database/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/core/vault/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/gui/main_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/gui/main_window.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/src/gui/widgets/secure_table.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/src/gui/widgets/secure_table.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Crypts_man/tests/test_integration.py" beforeDir="false" afterPath="$PROJECT_DIR$/Crypts_man/tests/test_integration.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -17,41 +30,46 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "Katarsis435"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Katarsis435&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/Katarsis435/Passw_Manage.git",
-    "accountId": "8011cc50-e312-4604-9e02-e8246b807e03"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Katarsis435/Passw_Manage.git&quot;,
+    &quot;accountId&quot;: &quot;8011cc50-e312-4604-9e02-e8246b807e03&quot;
   }
-}]]></component>
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 0
 }</component>
   <component name="ProjectId" id="3AaODloCcea9Ujn3IwgeTUsVhQl" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python tests.Python tests in test_inegration.py.executor": "Run",
-    "Python.__init__.executor": "Run",
-    "Python.db.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.main_window.executor": "Run",
-    "Python.test_tkinter.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "C:/Users/1/PycharmProjects/PM"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python tests.Python tests in test_inegration.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python.__init__.executor&quot;: &quot;Run&quot;,
+    &quot;Python.db.executor&quot;: &quot;Run&quot;,
+    &quot;Python.debug_main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main_window.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_tkinter.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/1/PycharmProjects/PM&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\1\PycharmProjects\PM" />
@@ -60,11 +78,66 @@
       <recent name="C:\Users\1\PycharmProjects\PM\Cr-Ma\src\core" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\1\PycharmProjects\PM\Crypts_man\tests" />
       <recent name="C:\Users\1\PycharmProjects\PM\Crypts_man" />
       <recent name="C:\Users\1\PycharmProjects\PM\cryptosafe-manager\src\core" />
       <recent name="C:\Users\1\PycharmProjects\PM\Cr-Ma" />
       <recent name="C:\Users\1\PycharmProjects\PM\Cr-Ma\src\core" />
     </key>
+  </component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="debug_main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PM" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Crypts_man" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="C:\Users\1\PycharmProjects\PM\Crypts_man\debug_main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PM" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Crypts_man" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Crypts_man/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.debug_main" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -81,6 +154,19 @@
       <option name="presentableId" value="Default" />
       <updated>1772827098400</updated>
     </task>
+    <task id="LOCAL-00001" summary="3spr">
+      <option name="closed" value="true" />
+      <created>1775228992146</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1775228992146</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="3spr" />
+    <option name="LAST_COMMIT_MESSAGE" value="3spr" />
   </component>
 </project>

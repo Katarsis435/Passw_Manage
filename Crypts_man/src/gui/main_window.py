@@ -1,620 +1,787 @@
-# src/gui/main_window.py
+# src/gui/main_window.py (updated with Sprint 3 features)
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import os
-import time
+from tkinter import ttk, messagebox
 from datetime import datetime
 
-from Crypts_man.src.core.events import events, EventType
-from Crypts_man.src.core.state_manager import StateManager
-from Crypts_man.src.core.config import Config
-from Crypts_man.src.database.db import Database
-from Crypts_man.src.core.crypto.placeholder import AES256Placeholder
-from Crypts_man.src.core.key_manager import KeyManager
-from Crypts_man.src.core.authentication import AuthenticationManager
-from Crypts_man.src.gui.widgets.password_entry import PasswordEntry
-from Crypts_man.src.gui.widgets.secure_table import SecureTable
-from Crypts_man.src.gui.widgets.audit_log_viewer import AuditLogViewer
-
+from src.core.vault.entry_manager import EntryManager
+from src.core.vault.password_generator import PasswordGenerator
+from src.gui.widgets.secure_table import SecureTable
+from src.gui.dialogs.password_generator_dialog import PasswordGeneratorDialog
+from src.core.events import events, EventType
 
 
 class MainWindow:
-    """Main application window"""
+    """Main application window with vault management"""
 
-    def __init__(self, config: Config, db: Database):
+    def __init__(self, config, db):
         self.config = config
         self.db = db
-        self.state = StateManager()
-        self.crypto = AES256Placeholder()
-        self.key_manager = KeyManager(config)
-        self.auth_manager = AuthenticationManager(self.key_manager)
-
-        # Create main window
         self.root = tk.Tk()
         self.root.title("CryptoSafe Manager")
-        self.root.geometry("900x600")
+        self.root.geometry("1200x700")
 
-        # Setup UI
-        self._create_menu()
-        self._create_toolbar()
-        self._create_main_content()
-        self._create_statusbar()
+        # Initialize managers (will be set after auth)
+        self.entry_manager = None
+        self.password_generator = PasswordGenerator()
+        self.key_manager = None
+        self.auth_manager = None
 
-        # Bind events
-        self._setup_events()
+        # UI state
+        self.show_passwords = False
+        self.current_search = ""
 
-        # Check if first run
-        self._check_first_run()
+        self._setup_ui()
+        self._bind_events()
 
-    def _create_menu(self):
-        """Create menu bar"""
+        # Show login dialog
+        self.root.after(100, self._show_login)
+
+    def _setup_ui(self):
+        """Setup main UI components"""
+        # Menu bar
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New Vault", command=self._new_vault)
-        file_menu.add_command(label="Open Vault", command=self._open_vault)
+        file_menu.add_command(label="Lock Vault", command=self._lock_vault, accelerator="Ctrl+L")
         file_menu.add_separator()
-        file_menu.add_command(label="Backup", command=self._backup_vault)
+        file_menu.add_command(label="Backup Database", command=self._backup_database)
+        file_menu.add_command(label="Restore Database", command=self._restore_database)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu.add_command(label="Exit", command=self._quit)
 
-        # Edit menu
-        edit_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Edit", menu=edit_menu)
-        edit_menu.add_command(label="Add Entry", command=self._add_entry)
-        edit_menu.add_command(label="Edit Entry", command=self._edit_entry)
-        edit_menu.add_command(label="Delete Entry", command=self._delete_entry)
+        # Vault menu
+        vault_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Vault", menu=vault_menu)
+        vault_menu.add_command(label="Add Entry", command=self._add_entry, accelerator="Ctrl+N")
+        vault_menu.add_command(label="Edit Entry", command=self._edit_entry, accelerator="Ctrl+E")
+        vault_menu.add_command(label="Delete Entry", command=self._delete_entry, accelerator="Del")
+        vault_menu.add_separator()
+        vault_menu.add_command(label="Generate Password", command=self._show_password_generator, accelerator="Ctrl+G")
 
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Audit Logs", command=self._show_audit_logs)
-        view_menu.add_command(label="Settings", command=self._show_settings)
+        view_menu.add_command(label="Toggle Password Visibility", command=self._toggle_password_visibility,
+                              accelerator="Ctrl+Shift+P")
+        view_menu.add_separator()
+        view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
 
-    def _create_toolbar(self):
-        """Create toolbar"""
+        # Toolbar
         toolbar = ttk.Frame(self.root)
-        toolbar.pack(side=tk.TOP, fill=tk.X)
+        toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(toolbar, text="Add", command=self._add_entry).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Add Entry", command=self._add_entry).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Edit", command=self._edit_entry).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Delete", command=self._delete_entry).pack(side=tk.LEFT, padx=2)
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=5, fill=tk.Y)
-        ttk.Button(toolbar, text="Lock", command=self._lock_vault).pack(side=tk.LEFT, padx=2)
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+        ttk.Button(toolbar, text="Generate Password", command=self._show_password_generator).pack(side=tk.LEFT, padx=2)
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
 
-    def _create_main_content(self):
-        """Create main content area"""
-        # Paned window for resizable sections
-        paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Search frame
+        search_frame = ttk.Frame(self.root)
+        search_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        # Left frame for vault entries
-        left_frame = ttk.Frame(paned)
-        paned.add(left_frame, weight=3)
+        ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=5)
 
-        ttk.Label(left_frame, text="Vault Entries", font=('Arial', 12, 'bold')).pack(anchor=tk.W)
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add('write', self._on_search_change)
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
+        self.search_entry.pack(side=tk.LEFT, padx=5)
 
-        # Secure table
-        self.table = SecureTable(left_frame)
-        self.table.pack(fill=tk.BOTH, expand=True, pady=5)
+        ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side=tk.LEFT, padx=2)
 
-        # Right frame for details/audit
-        right_frame = ttk.Frame(paned)
-        paned.add(right_frame, weight=1)
+        # Filter frame
+        filter_frame = ttk.Frame(self.root)
+        filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        self.notebook = ttk.Notebook(right_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(filter_frame, text="Filter by Category:").pack(side=tk.LEFT, padx=5)
+        self.category_filter = ttk.Combobox(filter_frame, values=["All", "Work", "Personal", "Finance", "Social"],
+                                            state="readonly", width=15)
+        self.category_filter.set("All")
+        self.category_filter.bind('<<ComboboxSelected>>', self._on_filter_change)
+        self.category_filter.pack(side=tk.LEFT, padx=5)
 
-        # Details tab
-        details_frame = ttk.Frame(self.notebook)
-        self.notebook.add(details_frame, text="Details")
+        # Main table
+        table_frame = ttk.Frame(self.root)
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.details_text = tk.Text(details_frame, wrap=tk.WORD, height=10)
-        self.details_text.pack(fill=tk.BOTH, expand=True)
+        self.table = SecureTable(table_frame)
+        self.table.pack(fill=tk.BOTH, expand=True)
 
-        # Audit log viewer (stub)
-        self.audit_viewer = AuditLogViewer(self.notebook, height=10)
-        self.notebook.add(self.audit_viewer, text="Audit Log")
+        # Set callbacks
+        self.table.parent = self.root
+        self.table.edit_entry_callback = self._edit_entry
+        self.table.delete_entry_callback = self._delete_entry
 
-    def _create_statusbar(self):
-        """Create status bar"""
-        self.statusbar = ttk.Frame(self.root)
-        self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
+        # Status bar
+        self.status_frame = ttk.Frame(self.root)
+        self.status_frame.pack(side=tk.BOTTOM, fill=tk.X)
 
-        self.status_label = ttk.Label(self.statusbar, text="Ready", relief=tk.SUNKEN)
-        self.status_label.pack(side=tk.LEFT, padx=5)
+        self.status_label = ttk.Label(self.status_frame, text="Ready", relief=tk.SUNKEN)
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.lock_label = ttk.Label(self.statusbar, text="Locked", relief=tk.SUNKEN)
-        self.lock_label.pack(side=tk.RIGHT, padx=5)
+        # Lock status indicator
+        self.lock_status = ttk.Label(self.status_frame, text="🔒 Locked", foreground="red")
+        self.lock_status.pack(side=tk.RIGHT, padx=5)
 
-        self.clipboard_label = ttk.Label(self.statusbar, text="Clipboard: --", relief=tk.SUNKEN)
-        self.clipboard_label.pack(side=tk.RIGHT, padx=5)
+        # Bind keyboard shortcuts
+        self._bind_shortcuts()
 
-    def _setup_events(self):
-        """Setup event subscriptions"""
-        events.subscribe(EventType.ENTRY_ADDED, self._on_entry_added)
-        events.subscribe(EventType.ENTRY_UPDATED, self._on_entry_updated)
-        events.subscribe(EventType.ENTRY_DELETED, self._on_entry_deleted)
+    def _bind_shortcuts(self):
+        """Bind keyboard shortcuts"""
+        self.root.bind('<Control-n>', lambda e: self._add_entry())
+        self.root.bind('<Control-e>', lambda e: self._edit_entry())
+        self.root.bind('<Delete>', lambda e: self._delete_entry())
+        self.root.bind('<Control-Shift-P>', lambda e: self._toggle_password_visibility())
+        self.root.bind('<F5>', lambda e: self._load_vault_data())
+        self.root.bind('<Control-l>', lambda e: self._lock_vault())
+        self.root.bind('<Control-g>', lambda e: self._show_password_generator())
+        self.root.bind('<Control-f>', lambda e: self.search_entry.focus_set())
+
+    def _bind_events(self):
+        """Bind event system callbacks"""
+        events.subscribe(EventType.ENTRY_ADDED, self._on_entry_changed)
+        events.subscribe(EventType.ENTRY_UPDATED, self._on_entry_changed)
+        events.subscribe(EventType.ENTRY_DELETED, self._on_entry_changed)
         events.subscribe(EventType.USER_LOGGED_IN, self._on_user_logged_in)
         events.subscribe(EventType.USER_LOGGED_OUT, self._on_user_logged_out)
 
-        # Audit log stubs
-        events.subscribe(EventType.ENTRY_ADDED, self._log_audit_event)
-        events.subscribe(EventType.ENTRY_UPDATED, self._log_audit_event)
-        events.subscribe(EventType.ENTRY_DELETED, self._log_audit_event)
+    def _on_entry_changed(self, data):
+        """Handle entry changes"""
+        self._load_vault_data()
 
-    def _log_audit_event(self, data):
-        """Stub for audit logging"""
-        if data:
-            action = f"Entry {data.get('action', 'unknown')}: {data.get('title', '')}"
-            self.db.add_audit_log(action, data.get('id'))
-            self.audit_viewer.add_entry(f"{datetime.now()}: {action}")
+    def _on_user_logged_in(self, data):
+        """Handle user login"""
+        self.lock_status.config(text="🔓 Unlocked", foreground="green")
+        self._init_vault_components()
+        self._load_vault_data()
 
-    def _check_first_run(self):
-        """Check if first run and show setup wizard or login"""
-        if not os.path.exists(self.config.database_path):
-            self._show_first_run_wizard()
-        else:
-            # Проверяем, есть ли данные аутентификации
-            auth_hash = self.db.get_auth_hash()
-            if not auth_hash:
-                # Нет данных аутентификации - первый запуск
-                self._show_first_run_wizard()
-            else:
-                # Показываем диалог входа
-                self._show_login_dialog()
+    def _on_user_logged_out(self, data):
+        """Handle user logout"""
+        self.lock_status.config(text="🔒 Locked", foreground="red")
+        self.table.set_data([])
+        self.entry_manager = None
 
-    def _show_login_dialog(self):
+    def _init_vault_components(self):
+        """Initialize vault components after authentication"""
+        from src.core.key_manager import KeyManager
+        from src.core.authentication import AuthenticationManager
+
+        self.key_manager = KeyManager(self.config)
+        self.auth_manager = AuthenticationManager(self.key_manager)
+
+        encryption_key = self.auth_manager.get_encryption_key()
+        if encryption_key:
+            self.key_manager.cache_encryption_key(encryption_key)
+            try:
+                self.entry_manager = EntryManager(self.db, self.key_manager)
+            except ValueError as e:
+                messagebox.showerror("Error", str(e))
+                self._show_login()
+
+    def _show_login(self):
         """Show login dialog"""
         dialog = tk.Toplevel(self.root)
-        dialog.title("Login")
-        dialog.geometry("350x200")
+        dialog.title("Login - CryptoSafe")
+        dialog.geometry("400x300")
         dialog.transient(self.root)
         dialog.grab_set()
 
         # Center dialog
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (350 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (300 // 2)
         dialog.geometry(f"+{x}+{y}")
 
-        # Password input
-        ttk.Label(dialog, text="Enter Master Password:", font=('Arial', 10, 'bold')).pack(pady=(20, 5))
-        password_entry = PasswordEntry(dialog, label="")
-        password_entry.pack(padx=20, pady=5, fill=tk.X)
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Error label
-        error_label = ttk.Label(dialog, text="", foreground="red")
-        error_label.pack(pady=5)
+        ttk.Label(main_frame, text="CryptoSafe Manager", font=('Arial', 16, 'bold')).pack(pady=10)
 
-        # Status label for backoff
-        status_label = ttk.Label(dialog, text="")
-        status_label.pack()
+        # Check if first run
+        auth_hash = self.db.get_auth_hash()
+        if not auth_hash:
+            self._show_first_run_setup(dialog)
+            return
 
-        def login():
-            # Check backoff
-            if self.auth_manager.should_delay():
-                remaining = int(self.auth_manager.get_delay() -
-                               (time.time() - self.auth_manager._last_failed_time))
-                status_label.config(text=f"Please wait {remaining} seconds...")
-                dialog.after(1000, login)
-                return
+        ttk.Label(main_frame, text="Enter Master Password:").pack(pady=5)
 
+        password_entry = ttk.Entry(main_frame, show="*", width=30)
+        password_entry.pack(pady=5)
+        password_entry.focus()
+
+        error_label = ttk.Label(main_frame, text="", foreground="red")
+        error_label.pack()
+
+        def do_login():
             password = password_entry.get()
             if not password:
-                error_label.config(text="Password required")
+                error_label.config(text="Please enter password")
                 return
 
-            # Get stored data
-            auth_hash = self.db.get_auth_hash()
+            auth_hash_data = self.db.get_auth_hash()
             salt_data = self.db.get_encryption_salt()
 
-            if not auth_hash or not salt_data:
+            if not auth_hash_data or not salt_data:
                 error_label.config(text="Authentication data not found")
                 return
 
-            # Authenticate
-            encryption_key = self.auth_manager.authenticate(
+            from src.core.key_manager import KeyManager
+            key_manager = KeyManager(self.config)
+
+            # Create auth manager for this login
+            from src.core.authentication import AuthenticationManager
+            auth_manager = AuthenticationManager(key_manager)
+
+            encryption_key = auth_manager.authenticate(
                 password,
-                auth_hash['hash'].decode(),
+                auth_hash_data['hash'].decode() if isinstance(auth_hash_data['hash'], bytes) else auth_hash_data['hash'],
                 salt_data['salt']
             )
 
             if encryption_key:
+                self.auth_manager = auth_manager
+                self.key_manager = key_manager
                 dialog.destroy()
-                self._unlock_vault()
+                self._init_vault_components()
+                self._load_vault_data()
             else:
                 error_label.config(text="Invalid password")
-                password_entry.clear()
-                password_entry.focus()
 
-        ttk.Button(dialog, text="Login", command=login).pack(pady=20)
+        password_entry.bind('<Return>', lambda e: do_login())
+        ttk.Button(main_frame, text="Login", command=do_login).pack(pady=10)
 
-        # Bind Enter key
-        dialog.bind('<Return>', lambda e: login())
-        password_entry.focus()
+    def _show_first_run_setup(self, parent):
+        """Show first run setup wizard"""
+        for widget in parent.winfo_children():
+            widget.destroy()
 
-    def _show_first_run_wizard(self):
-        """First run setup wizard"""
-        wizard = tk.Toplevel(self.root)
-        wizard.title("First Run Setup")
-        wizard.geometry("400x350")
-        wizard.transient(self.root)
-        wizard.grab_set()
+        main_frame = ttk.Frame(parent, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(wizard, text="Welcome to CryptoSafe Manager!",
-                  font=('Arial', 14, 'bold')).pack(pady=10)
+        ttk.Label(main_frame, text="Welcome to CryptoSafe Manager!", font=('Arial', 14, 'bold')).pack(pady=10)
+        ttk.Label(main_frame, text="Create your master password").pack(pady=5)
 
-        # Master password
-        password_frame = ttk.Frame(wizard)
-        password_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(main_frame, text="Master Password:").pack(pady=5)
+        password_entry = ttk.Entry(main_frame, show="*", width=30)
+        password_entry.pack(pady=5)
 
-        ttk.Label(password_frame, text="Create Master Password:").pack(anchor=tk.W)
-        password_entry = PasswordEntry(password_frame, label="")
-        password_entry.pack(fill=tk.X, pady=5)
+        ttk.Label(main_frame, text="Confirm Password:").pack(pady=5)
+        confirm_entry = ttk.Entry(main_frame, show="*", width=30)
+        confirm_entry.pack(pady=5)
 
-        ttk.Label(password_frame, text="Confirm Password:").pack(anchor=tk.W)
-        confirm_entry = PasswordEntry(password_frame, label="")
-        confirm_entry.pack(fill=tk.X, pady=5)
+        error_label = ttk.Label(main_frame, text="", foreground="red")
+        error_label.pack()
 
-        # Password strength indicator
-        strength_label = ttk.Label(password_frame, text="")
-        strength_label.pack()
-
-        def check_strength(*args):
-            pwd = password_entry.get()
-            if len(pwd) < 12:
-                strength_label.config(text="❌ Too short (min 12 chars)", foreground="red")
-            elif not any(c.isupper() for c in pwd):
-                strength_label.config(text="⚠️ Add uppercase letters", foreground="orange")
-            elif not any(c.islower() for c in pwd):
-                strength_label.config(text="⚠️ Add lowercase letters", foreground="orange")
-            elif not any(c.isdigit() for c in pwd):
-                strength_label.config(text="⚠️ Add numbers", foreground="orange")
-            elif not any(c in "!@#$%^&*" for c in pwd):
-                strength_label.config(text="⚠️ Add symbols (!@#$%^&*)", foreground="orange")
-            else:
-                strength_label.config(text="✓ Strong password", foreground="green")
-
-        password_entry.entry.bind('<KeyRelease>', check_strength)
-
-        # Database location
-        location_frame = ttk.Frame(wizard)
-        location_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        ttk.Label(location_frame, text="Database Location:").pack(anchor=tk.W)
-
-        location_entry = ttk.Entry(location_frame)
-        location_entry.insert(0, self.config.database_path)
-        location_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        def browse_location():
-            filename = filedialog.asksaveasfilename(
-                title="Select Database Location",
-                defaultextension=".db",
-                filetypes=[("SQLite Database", "*.db"), ("All Files", "*.*")]
-            )
-            if filename:
-                location_entry.delete(0, tk.END)
-                location_entry.insert(0, filename)
-
-        ttk.Button(location_frame, text="Browse", command=browse_location).pack(side=tk.RIGHT, padx=(5, 0))
-
-        def finish_setup():
+        def do_setup():
             password = password_entry.get()
             confirm = confirm_entry.get()
 
             if not password:
-                messagebox.showerror("Error", "Password cannot be empty")
+                error_label.config(text="Please enter a password")
                 return
 
             if password != confirm:
-                messagebox.showerror("Error", "Passwords do not match")
+                error_label.config(text="Passwords do not match")
                 return
 
-            # Password strength check
-            if len(password) < 12:
-                messagebox.showerror("Error", "Password must be at least 12 characters")
+            if len(password) < 8:
+                error_label.config(text="Password must be at least 8 characters")
                 return
 
-            # Save configuration
-            self.config.set("database_path", location_entry.get())
+            from src.core.key_manager import KeyManager
+            key_manager = KeyManager(self.config)
 
-            # Initialize database
-            self.db = Database(self.config.database_path)
+            # Create auth hash
+            auth_result = key_manager.create_auth_hash(password)
 
-            # Create authentication hash
-            auth_result = self.key_manager.create_auth_hash(password)
+            # Generate salt for encryption key
+            import os
+            salt = os.urandom(16)
+
+            # Store in database
             self.db.store_auth_hash(auth_result['hash'], auth_result['params'])
-
-            # Generate and store encryption salt
-            encryption_salt = os.urandom(16)
-            self.db.store_encryption_salt(encryption_salt)
-
-            # Store key parameters
+            self.db.store_encryption_salt(salt)
             self.db.store_key_params(auth_result['params'])
 
-            wizard.destroy()
+            parent.destroy()
+            self._show_login()
 
-            # Derive and cache encryption key
-            encryption_key = self.key_manager.derive_encryption_key(password, encryption_salt)
-            self.key_manager.cache_encryption_key(encryption_key)
-
-            # Unlock vault
-            self._unlock_vault()
-
-        ttk.Button(wizard, text="Finish", command=finish_setup).pack(pady=20)
-
-    def _load_vault_data(self):
-        """Load vault data into table"""
-        entries = self.db.get_entries()
-
-        # Format data for table
-        table_data = []
-        for entry in entries:
-            table_data.append({
-                'id': entry['id'],
-                'title': entry['title'],
-                'username': entry['username'] or '',
-                'url': entry['url'] or '',
-                'updated_at': entry['updated_at'][:10] if entry['updated_at'] else ''
-            })
-        self.table.set_data(table_data)
-
-    def _unlock_vault(self):
-        """Unlock the vault"""
-        self.state.unlock()
-        self.lock_label.config(text="Unlocked")
-        self._load_vault_data()
-        # Event already published by auth_manager
+        ttk.Button(main_frame, text="Create Vault", command=do_setup).pack(pady=10)
 
     def _lock_vault(self):
         """Lock the vault"""
-        self.auth_manager.logout()
-        self.state.lock()
-        self.lock_label.config(text="Locked")
-        self.table.set_data([])
+        if self.auth_manager:
+            self.auth_manager.logout()
+        self._on_user_logged_out(None)
+        self._show_login()
+
+    def _load_vault_data(self):
+        """Load vault data using EntryManager"""
+        if not self.entry_manager:
+            return
+
+        try:
+            category = self.category_filter.get()
+            if category == "All":
+                category = None
+
+            search = self.search_var.get() if self.search_var.get() else None
+
+            entries = self.entry_manager.get_all_entries(search=search, category=category)
+
+            # Format data for table
+            table_data = []
+            for entry in entries:
+                table_data.append({
+                    'id': entry.get('id', ''),
+                    'title': entry.get('title', ''),
+                    'username': entry.get('username', ''),
+                    'url': entry.get('url', ''),
+                    'updated_at': entry.get('updated_at', '')[:10] if entry.get('updated_at') else '',
+                    'category': entry.get('category', '')
+                })
+
+            self.table.set_data(table_data, self.show_passwords)
+            self.status_label.config(text=f"Loaded {len(table_data)} entries")
+
+            # Update category list
+            categories = set(entry.get('category', '') for entry in entries if entry.get('category'))
+            if categories:
+                current = self.category_filter.get()
+                self.category_filter['values'] = ["All"] + sorted(categories)
+                if current not in self.category_filter['values']:
+                    self.category_filter.set("All")
+
+        except Exception as e:
+            self.status_label.config(text=f"Error loading entries: {e}")
 
     def _add_entry(self):
-        """Add new vault entry"""
-        if not self.auth_manager.is_authenticated():
+        """Add new vault entry with enhanced dialog"""
+        if not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
 
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Entry")
-        dialog.geometry("400x350")
+        dialog.geometry("550x650")
         dialog.transient(self.root)
+        dialog.grab_set()
 
-        # Create form
+        # Create scrollable frame
+        canvas = tk.Canvas(dialog)
+        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Form fields
         fields = {}
         row = 0
 
-        for field in ['Title', 'Username', 'Password', 'URL', 'Notes', 'Tags']:
-            ttk.Label(dialog, text=f"{field}:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=2)
+        form_frame = ttk.Frame(scrollable_frame, padding="10")
+        form_frame.pack(fill=tk.BOTH, expand=True)
 
-            if field == 'Password':
-                entry = PasswordEntry(dialog, label="")
-                entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=2)
-                fields[field.lower()] = entry
-            elif field == 'Notes':
-                entry = tk.Text(dialog, height=3, width=30)
-                entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=2)
-                fields[field.lower()] = entry
-            else:
-                entry = ttk.Entry(dialog)
-                entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=2)
-                fields[field.lower()] = entry
-            row += 1
+        # Title (required)
+        ttk.Label(form_frame, text="Title*:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        title_entry = ttk.Entry(form_frame, width=40)
+        title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['title'] = title_entry
+        row += 1
 
-        dialog.grid_columnconfigure(1, weight=1)
+        # Username
+        ttk.Label(form_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        username_entry = ttk.Entry(form_frame, width=40)
+        username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['username'] = username_entry
+        row += 1
+
+        # Password with generator
+        ttk.Label(form_frame, text="Password:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        pwd_frame = ttk.Frame(form_frame)
+        pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+
+        password_entry = ttk.Entry(pwd_frame, show="*", width=30)
+        password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def generate_and_set():
+            def set_password(pwd):
+                password_entry.delete(0, tk.END)
+                password_entry.insert(0, pwd)
+                self._update_password_strength(password_entry.get(), strength_label)
+
+            PasswordGeneratorDialog(dialog, self.password_generator, set_password)
+
+        ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
+        fields['password'] = password_entry
+
+        # Strength meter
+        strength_label = ttk.Label(form_frame, text="")
+        strength_label.grid(row=row + 1, column=1, sticky=tk.W, padx=5)
+        row += 2
+
+        # URL
+        ttk.Label(form_frame, text="URL:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        url_entry = ttk.Entry(form_frame, width=40)
+        url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['url'] = url_entry
+        row += 1
+
+        # Category
+        ttk.Label(form_frame, text="Category:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"],
+                                      width=37, state="readonly")
+        category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['category'] = category_combo
+        row += 1
+
+        # Tags
+        ttk.Label(form_frame, text="Tags:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        tags_entry = ttk.Entry(form_frame, width=40)
+        tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['tags'] = tags_entry
+        row += 1
+
+        # Notes
+        ttk.Label(form_frame, text="Notes:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        notes_text = tk.Text(form_frame, height=5, width=40)
+        notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['notes'] = notes_text
+        row += 1
+
+        form_frame.grid_columnconfigure(1, weight=1)
 
         def save():
-            # Get values
             title = fields['title'].get()
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
 
-            username = fields['username'].get()
             password = fields['password'].get()
-            url = fields['url'].get()
-            notes = fields['notes'].get(1.0, tk.END).strip()
-            tags = fields['tags'].get()
+            if not password:
+                if not messagebox.askyesno("Warning", "Password is empty. Continue?"):
+                    return
 
-            # Encrypt password
-            key = self.auth_manager.get_encryption_key() or b"0" * 32
-            encrypted = self.crypto.encrypt(password.encode(), key)
+            # Check password strength
+            if password:
+                strength = self.password_generator.estimate_strength(password)
+                if strength['score'] < 2:
+                    if not messagebox.askyesno("Weak Password",
+                                               f"Password is {strength['rating']}. Continue anyway?"):
+                        return
 
-            # Save to database
-            entry_id = self.db.add_entry(title, username, encrypted, url, notes, tags)
+            # Prepare entry data
+            entry_data = {
+                'title': title,
+                'username': fields['username'].get(),
+                'password': password,
+                'url': fields['url'].get(),
+                'category': fields['category'].get(),
+                'tags': fields['tags'].get(),
+                'notes': fields['notes'].get(1.0, tk.END).strip()
+            }
+
+            # Create entry
+            entry_id = self.entry_manager.create_entry(entry_data)
             dialog.destroy()
 
-            # Publish event
-            events.publish(EventType.ENTRY_ADDED, {
-                'id': entry_id,
-                'title': title,
-                'action': 'added'
-            })
-            # Reload data
             self._load_vault_data()
+            self.status_label.config(text=f"Entry added: {title}")
 
-        ttk.Button(dialog, text="Save", command=save).grid(row=row, column=0, columnspan=2, pady=10)
+        # Buttons frame
+        button_frame = ttk.Frame(scrollable_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+
+        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def _update_password_strength(self, password, label):
+        """Update password strength display"""
+        strength = self.password_generator.estimate_strength(password)
+        label.config(text=f"Strength: {strength['rating']}")
 
     def _edit_entry(self):
-        """Edit selected entry"""
-        if not self.auth_manager.is_authenticated():
+        """Edit selected entry with full form"""
+        if not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
 
-        selected_id = self.table.get_selected()
-        if not selected_id:
+        selected = self.table.get_selected_row()
+        if not selected:
             messagebox.showinfo("Info", "Please select an entry to edit")
             return
-        messagebox.showinfo("Info", "Edit functionality - Sprint 2 implementation")
+
+        entry_id = selected.get('id')
+        entry = self.entry_manager.get_entry(entry_id)
+        if not entry:
+            messagebox.showerror("Error", "Entry not found")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Edit Entry")
+        dialog.geometry("550x650")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Create scrollable frame
+        canvas = tk.Canvas(dialog)
+        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        fields = {}
+        row = 0
+
+        form_frame = ttk.Frame(scrollable_frame, padding="10")
+        form_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Title
+        ttk.Label(form_frame, text="Title*:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        title_entry = ttk.Entry(form_frame, width=40)
+        title_entry.insert(0, entry.get('title', ''))
+        title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['title'] = title_entry
+        row += 1
+
+        # Username
+        ttk.Label(form_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        username_entry = ttk.Entry(form_frame, width=40)
+        username_entry.insert(0, entry.get('username', ''))
+        username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['username'] = username_entry
+        row += 1
+
+        # Password
+        ttk.Label(form_frame, text="Password:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        pwd_frame = ttk.Frame(form_frame)
+        pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+
+        password_entry = ttk.Entry(pwd_frame, show="*", width=30)
+        password_entry.insert(0, entry.get('password', ''))
+        password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def generate_and_set():
+            def set_password(pwd):
+                password_entry.delete(0, tk.END)
+                password_entry.insert(0, pwd)
+
+            PasswordGeneratorDialog(dialog, self.password_generator, set_password)
+
+        ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
+        fields['password'] = password_entry
+        row += 1
+
+        # URL
+        ttk.Label(form_frame, text="URL:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        url_entry = ttk.Entry(form_frame, width=40)
+        url_entry.insert(0, entry.get('url', ''))
+        url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['url'] = url_entry
+        row += 1
+
+        # Category
+        ttk.Label(form_frame, text="Category:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"],
+                                      width=37, state="readonly")
+        category_combo.set(entry.get('category', ''))
+        category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['category'] = category_combo
+        row += 1
+
+        # Tags
+        ttk.Label(form_frame, text="Tags:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        tags_entry = ttk.Entry(form_frame, width=40)
+        tags_entry.insert(0, entry.get('tags', ''))
+        tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['tags'] = tags_entry
+        row += 1
+
+        # Notes
+        ttk.Label(form_frame, text="Notes:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        notes_text = tk.Text(form_frame, height=5, width=40)
+        notes_text.insert(1.0, entry.get('notes', ''))
+        notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
+        fields['notes'] = notes_text
+        row += 1
+
+        form_frame.grid_columnconfigure(1, weight=1)
+
+        def save():
+            updated_data = {
+                'title': fields['title'].get(),
+                'username': fields['username'].get(),
+                'password': fields['password'].get(),
+                'url': fields['url'].get(),
+                'category': fields['category'].get(),
+                'tags': fields['tags'].get(),
+                'notes': fields['notes'].get(1.0, tk.END).strip()
+            }
+
+            if not updated_data['title']:
+                messagebox.showerror("Error", "Title is required")
+                return
+
+            result = self.entry_manager.update_entry(entry_id, updated_data)
+            if result:
+                dialog.destroy()
+                self._load_vault_data()
+                self.status_label.config(text=f"Entry updated: {updated_data['title']}")
+            else:
+                messagebox.showerror("Error", "Failed to update entry")
+
+        ttk.Button(form_frame, text="Save", command=save).grid(row=row, column=0, columnspan=2, pady=10)
+        ttk.Button(form_frame, text="Cancel", command=dialog.destroy).grid(row=row + 1, column=0, columnspan=2, pady=5)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
     def _delete_entry(self):
-        """Delete selected entry"""
-        if not self.auth_manager.is_authenticated():
+        """Delete selected entry with confirmation"""
+        if not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
 
-        selected_id = self.table.get_selected()
-        if not selected_id:
+        selected_rows = self.table.get_selected_rows()
+        if not selected_rows:
             messagebox.showinfo("Info", "Please select an entry to delete")
             return
 
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this entry?"):
-            self.db.delete_entry(int(selected_id))
-            # Publish event
-            events.publish(EventType.ENTRY_DELETED, {
-                'id': int(selected_id),
-                'action': 'deleted'
-            })
+        count = len(selected_rows)
+        msg = f"Are you sure you want to delete {count} entry{'s' if count > 1 else ''}?"
+        msg += "\n\nDeleted entries can be restored from the backup."
+
+        if messagebox.askyesno("Confirm Delete", msg):
+            deleted = 0
+            for row in selected_rows:
+                if self.entry_manager.delete_entry(str(row.get('id', '')), soft_delete=True):
+                    deleted += 1
 
             self._load_vault_data()
+            self.status_label.config(text=f"Deleted {deleted} entries")
 
-    def _on_entry_added(self, data):
-        """Handle entry added event"""
-        self.status_label.config(text=f"Entry added: {data.get('title', '')}")
+    def _toggle_password_visibility(self):
+        """Toggle password visibility in table"""
+        self.show_passwords = not self.show_passwords
+        self.table.toggle_password_visibility()
 
-    def _on_entry_updated(self, data):
-        """Handle entry updated event"""
-        self.status_label.config(text=f"Entry updated: {data.get('title', '')}")
-
-    def _on_entry_deleted(self, data):
-        """Handle entry deleted event"""
-        self.status_label.config(text=f"Entry deleted (ID: {data.get('id', '')})")
-
-    def _on_user_logged_in(self, data):
-        """Handle user login event"""
-        self.status_label.config(text="User logged in")
-
-    def _on_user_logged_out(self, data=None):
-        """Handle user logout event"""
-        self.status_label.config(text="User logged out")
-
-    def _new_vault(self):
-        """Create new vault"""
-        if messagebox.askyesno("New Vault", "Create a new vault? This will overwrite existing data."):
+    def _show_password_generator(self):
+        """Show standalone password generator"""
+        def use_password(password):
+            # Could insert into active entry if needed
             pass
 
-    def _open_vault(self):
-        """Open existing vault"""
-        filename = filedialog.askopenfilename(
-            title="Open Vault",
-            filetypes=[("SQLite Database", "*.db"), ("All Files", "*.*")]
-        )
-        if filename:
-            self.config.set("database_path", filename)
-            self.db = Database(filename)
-            self._show_login_dialog()
+        PasswordGeneratorDialog(self.root, self.password_generator, use_password)
 
-    def _backup_vault(self):
-        """Backup vault"""
-        if not os.path.exists(self.config.database_path):
-            messagebox.showwarning("No Vault", "No vault to backup")
-            return
+    def _on_search_change(self, *args):
+        """Handle search text change with debouncing"""
+        if hasattr(self, '_search_after'):
+            self.root.after_cancel(self._search_after)
+        self._search_after = self.root.after(300, self._perform_search)
 
-        filename = filedialog.asksaveasfilename(
-            title="Backup Vault",
+    def _perform_search(self):
+        """Perform actual search"""
+        self._load_vault_data()
+
+    def _clear_search(self):
+        """Clear search field"""
+        self.search_var.set("")
+        self.search_entry.focus()
+
+    def _on_filter_change(self, event=None):
+        """Handle category filter change"""
+        self._load_vault_data()
+
+    def _backup_database(self):
+        """Backup database"""
+        from tkinter import filedialog
+        import os
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"cryptosafe_backup_{timestamp}.db"
+
+        file_path = filedialog.asksaveasfilename(
             defaultextension=".db",
-            filetypes=[("SQLite Database", "*.db"), ("All Files", "*.*")]
+            initialfile=default_name,
+            filetypes=[("Database files", "*.db"), ("All files", "*.*")]
         )
-        if filename:
-            if self.db.backup(filename):
-                messagebox.showinfo("Success", "Vault backed up successfully")
+
+        if file_path:
+            if self.db.backup(file_path):
+                messagebox.showinfo("Success", f"Backup saved to:\n{file_path}")
             else:
                 messagebox.showerror("Error", "Backup failed")
 
-    def _show_audit_logs(self):
-        """Show audit logs"""
-        self.notebook.select(1)
+    def _restore_database(self):
+        """Restore database from backup"""
+        from tkinter import filedialog
 
-    def _show_settings(self):
-        """Show settings dialog (stub for Sprint 4)"""
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Settings")
-        dialog.geometry("500x400")
-        dialog.transient(self.root)
+        if not messagebox.askyesno("Warning",
+                                   "Restoring will overwrite current data.\n"
+                                   "Make sure you have a backup of current data.\n\n"
+                                   "Continue?"):
+            return
 
-        notebook = ttk.Notebook(dialog)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Database files", "*.db"), ("All files", "*.*")]
+        )
 
-        # Security tab
-        security_frame = ttk.Frame(notebook)
-        notebook.add(security_frame, text="Security")
-
-        ttk.Label(security_frame, text="Clipboard timeout (seconds):").pack(anchor=tk.W, pady=5)
-        timeout_var = tk.StringVar(value=str(self.config.get("clipboard_timeout", 30)))
-        ttk.Entry(security_frame, textvariable=timeout_var).pack(fill=tk.X)
-
-        ttk.Label(security_frame, text="Auto-lock (minutes):").pack(anchor=tk.W, pady=5)
-        lock_var = tk.StringVar(value=str(self.config.get("auto_lock_minutes", 5)))
-        ttk.Entry(security_frame, textvariable=lock_var).pack(fill=tk.X)
-
-        # Appearance tab
-        appearance_frame = ttk.Frame(notebook)
-        notebook.add(appearance_frame, text="Appearance")
-
-        ttk.Label(appearance_frame, text="Theme:").pack(anchor=tk.W, pady=5)
-        theme_var = tk.StringVar(value=self.config.get("theme", "default"))
-        ttk.Combobox(appearance_frame, textvariable=theme_var,
-                     values=["default", "dark", "light"]).pack(fill=tk.X)
-
-        ttk.Label(appearance_frame, text="Language:").pack(anchor=tk.W, pady=5)
-        lang_var = tk.StringVar(value=self.config.get("language", "en"))
-        ttk.Combobox(appearance_frame, textvariable=lang_var,
-                     values=["en", "es", "fr", "de"]).pack(fill=tk.X)
-
-        # Advanced tab
-        advanced_frame = ttk.Frame(notebook)
-        notebook.add(advanced_frame, text="Advanced")
-
-        ttk.Button(advanced_frame, text="Backup Now",
-                   command=self._backup_vault).pack(pady=5)
-        ttk.Button(advanced_frame, text="Export Data (CSV)",
-                   command=lambda: messagebox.showinfo("Info", "Export - Sprint 6")).pack(pady=5)
-
-        def save_settings():
-            self.config.set("clipboard_timeout", int(timeout_var.get()))
-            self.config.set("auto_lock_minutes", int(lock_var.get()))
-            self.config.set("theme", theme_var.get())
-            self.config.set("language", lang_var.get())
-            dialog.destroy()
-            messagebox.showinfo("Settings", "Settings saved")
-
-        ttk.Button(dialog, text="Save", command=save_settings).pack(pady=10)
+        if file_path:
+            if self.db.restore(file_path):
+                messagebox.showinfo("Success", "Database restored successfully")
+                self._load_vault_data()
+            else:
+                messagebox.showerror("Error", "Restore failed")
 
     def _show_about(self):
         """Show about dialog"""
         about_text = """CryptoSafe Manager
-Version: Sprint 2
-Secure password manager with audit logging and encryption.
+Version 1.0 (Sprint 3)
 
-Sprint 2 Features:
-- Master password authentication with Argon2id
-- Secure key derivation with PBKDF2
-- Exponential backoff for failed logins
-- Password strength validation
+A secure password manager with AES-256-GCM encryption.
 
-Coming in Sprints 3-8:
-- Real AES-GCM encryption
-- Auto-lock functionality
-- TOTP support
-- Secure sharing
-- And more..."""
+Features:
+• Per-entry AES-256-GCM encryption
+• Secure password generator with strength analysis
+• Full-text search and filtering
+• Soft delete with restore capability
 
+© 2024 CryptoSafe Team"""
         messagebox.showinfo("About", about_text)
 
+    def _quit(self):
+        """Quit application"""
+        if messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
+            if self.auth_manager:
+                self.auth_manager.logout()
+            self.db.close()
+            self.root.quit()
+            self.root.destroy()
+
     def run(self):
-        """Run the application"""
+        """Run the main application"""
         self.root.mainloop()

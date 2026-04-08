@@ -1,15 +1,18 @@
-# src/core/crypto/abstract.py
-from abc import ABC, abstractmethod
+# requirements.txt
+# Core dependencies for CryptoSafe Manager
 
-class EncryptionService(ABC):
-    """Abstract base class for encryption services"""
+# Cryptography
+cryptography>=41.0.0
+argon2-cffi>=21.3.0
 
-    @abstractmethod
-    def encrypt(self, data: bytes, key: bytes) -> bytes:
-        """Encrypt data with given key"""
-        pass
+# Password strength estimation (optional but recommended)
+zxcvbn-python>=4.4.28
 
-    @abstractmethod
-    def decrypt(self, ciphertext: bytes, key: bytes) -> bytes:
-        """Decrypt ciphertext with given key"""
-        pass
+# GUI (tkinter is included with Python)
+# No additional GUI dependencies needed
+
+# Testing
+coverage>=7.0.0
+
+# Database (sqlite3 is included with Python)
+# No additional database dependencies needed

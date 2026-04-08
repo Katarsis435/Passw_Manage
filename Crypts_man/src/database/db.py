@@ -147,6 +147,43 @@ class Database:
             except Exception as e:
                 logger.error(f"Error creating connection {i + 1}: {e}")
 
+    # src/database/db.py (updated schema for Sprint 3)
+
+    def migrate_to_sprint3(self):
+      """Migrate database schema to Sprint 3 format"""
+      with self.cursor() as c:
+        # Check if we need to migrate
+        c.execute("PRAGMA table_info(vault_entries)")
+        columns = [row[1] for row in c.fetchall()]
+
+        # Add new columns if they don't exist
+        if 'encrypted_data' not in columns:
+          c.execute("ALTER TABLE vault_entries ADD COLUMN encrypted_data BLOB")
+
+        if 'category' not in columns:
+          c.execute("ALTER TABLE vault_entries ADD COLUMN category TEXT")
+
+        if 'tags' not in columns:
+          c.execute("ALTER TABLE vault_entries ADD COLUMN tags TEXT")
+
+        # Create indexes
+        c.execute("CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_entries(category)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_vault_tags ON vault_entries(tags)")
+
+        # Create deleted_entries table for soft delete
+        c.execute("""
+                CREATE TABLE IF NOT EXISTS deleted_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    original_id TEXT,
+                    encrypted_data BLOB,
+                    title TEXT,
+                    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP
+                )
+            """)
+
+
+
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new database connection"""
         conn = sqlite3.connect(
