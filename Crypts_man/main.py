@@ -6,9 +6,9 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.core.config import Config
-from src.database.db import Database
-from src.gui.main_window import MainWindow
+from Crypts_man.src.core.config import Config
+from Crypts_man.src.database.db import Database
+from Crypts_man.src.gui.main_window import MainWindow
 
 
 def main():

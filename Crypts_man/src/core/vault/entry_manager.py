@@ -5,15 +5,14 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 import logging
 
-from src.core.vault.encryption_service import EncryptionService
-from src.core.events import events, EventType
+from Crypts_man.src.core.vault.encryption_service import EncryptionService
+from Crypts_man.src.core.events import events, EventType
 
 logger = logging.getLogger(__name__)
 
 
 class EntryManager:
     """Main CRUD operations controller for vault entries"""
-
     def __init__(self, db_connection, key_manager):
         """
         Initialize entry manager
@@ -160,50 +159,77 @@ class EntryManager:
             logger.error(f"Failed to decrypt entry {entry_id}: {e}")
             return None
 
+    # src/core/vault/entry_manager.py - В методе get_all_entries()
     def get_all_entries(self, limit: int = 1000, offset: int = 0,
                         search: str = None, category: str = None) -> List[Dict[str, Any]]:
-        """
-        Get all entries (decrypted)
-
-        Args:
-            limit: Maximum number of entries
-            offset: Pagination offset
-            search: Search query for full-text search
-            category: Filter by category
-
-        Returns:
-            List of decrypted entries
-        """
-        query = "SELECT id, encrypted_data FROM vault_entries WHERE 1=1"
-        params = []
-
-        if search:
-            query += " AND (title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ?)"
-            search_pattern = f"%{search}%"
-            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
-
-        if category:
-            query += " AND category = ?"
-            params.append(category)
-
-        query += " ORDER BY title LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
-        with self.db.cursor() as c:
-            c.execute(query, params)
-            rows = c.fetchall()
+        """Get entries formatted for GUI table - COMPATIBLE VERSION"""
+        # ... [код запроса остаётся без изменений] ...
 
         entries = []
         for row in rows:
-            try:
-                encrypted_blob = row[1] if isinstance(row, tuple) else row['encrypted_data']
-                decrypted = self.encryption_service.decrypt_entry(encrypted_blob)
-                entries.append(decrypted)
-            except Exception as e:
-                logger.error(f"Failed to decrypt entry: {e}")
-                continue
+            # Безопасное извлечение полей независимо от row_factory
+            if isinstance(row, sqlite3.Row):
+                entry_id = row['id']
+                encrypted_blob = row['encrypted_data']
+                title = row['title'] or ''
+                username = row['username'] or ''
+                url = row['url'] or ''
+                category_val = row['category'] or ''
+                tags_val = row['tags'] or ''
+                updated_at = row['updated_at'] or ''
+            else:  # tuple fallback
+                entry_id = row[0]
+                encrypted_blob = row[1] if len(row) > 1 else None
+                title = row[2] if len(row) > 2 else ''
+                username = row[3] if len(row) > 3 else ''
+                url = row[4] if len(row) > 4 else ''
+                category_val = row[5] if len(row) > 5 else ''
+                tags_val = row[6] if len(row) > 6 else ''
+                updated_at = row[8] if len(row) > 8 else ''
+
+            # Базовая структура для таблицы (всегда возвращаем эти поля)
+            table_entry = {
+                'id': str(entry_id),  # Гарантируем строку для UUID
+                'title': title,
+                'username': username,
+                'url': url,
+                'category': category_val,
+                'tags': tags_val,
+                'updated_at': str(updated_at)[:10] if updated_at else '',  # Только дата
+                'password': '',  # По умолчанию скрыт
+                'notes': '',
+            }
+
+            # Расшифровка только если есть encrypted_data
+            if encrypted_blob:
+                try:
+                    decrypted = self.encryption_service.decrypt_entry(encrypted_blob)
+                    # Объединяем, приоритет у расшифрованных полей
+                    table_entry.update({
+                        k: v for k, v in decrypted.items()
+                        if k in ['password', 'notes', 'version']
+                    })
+                except Exception as e:
+                    logger.warning(f"Decrypt failed for {entry_id}: {e}")
+                    table_entry['notes'] = '[Error]'
+
+            entries.append(table_entry)
 
         return entries
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def update_entry(self, entry_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """

@@ -1,5 +1,5 @@
 # src/core/crypto/placeholder.py
-from src.core.crypto.abstract import EncryptionService
+from Crypts_man.src.core.crypto.abstract import EncryptionService
 import os
 
 

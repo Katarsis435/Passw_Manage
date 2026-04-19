@@ -38,6 +38,7 @@ class Database:
 
         # Then initialize connection pool
         self._init_connection_pool()
+        self.migrate_to_sprint3()  #ЭТО ВАЖНО
 
     def _init_database_schema(self):
         """Initialize database schema using a temporary connection"""
@@ -150,28 +151,42 @@ class Database:
     # src/database/db.py (updated schema for Sprint 3)
 
     def migrate_to_sprint3(self):
-      """Migrate database schema to Sprint 3 format"""
-      with self.cursor() as c:
-        # Check if we need to migrate
-        c.execute("PRAGMA table_info(vault_entries)")
-        columns = [row[1] for row in c.fetchall()]
+        """Migrate database schema to Sprint 3 format - SAFE VERSION"""
+        with self.cursor() as c:
+            # Проверяем текущую схему
+            c.execute("PRAGMA table_info(vault_entries)")
+            columns = {row[1]: row[2] for row in c.fetchall()}  # {name: type}
 
-        # Add new columns if they don't exist
-        if 'encrypted_data' not in columns:
-          c.execute("ALTER TABLE vault_entries ADD COLUMN encrypted_data BLOB")
+            # 1. Добавляем encrypted_data, если нет
+            if 'encrypted_data' not in columns:
+                c.execute("ALTER TABLE vault_entries ADD COLUMN encrypted_data BLOB")
+                print("✓ Added encrypted_data column")
 
-        if 'category' not in columns:
-          c.execute("ALTER TABLE vault_entries ADD COLUMN category TEXT")
+            # 2. Добавляем category/tags, если нет
+            if 'category' not in columns:
+                c.execute("ALTER TABLE vault_entries ADD COLUMN category TEXT")
+            if 'tags' not in columns:
+                c.execute("ALTER TABLE vault_entries ADD COLUMN tags TEXT")
 
-        if 'tags' not in columns:
-          c.execute("ALTER TABLE vault_entries ADD COLUMN tags TEXT")
+            # 3. ⚠️ ВАЖНО: Если id INTEGER, а нужно TEXT для UUID — миграция данных
+            if columns.get('id') == 'INTEGER':
+                self._safe_migrate_id_to_text(c)
 
-        # Create indexes
-        c.execute("CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_entries(category)")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_vault_tags ON vault_entries(tags)")
+            # 4. Создаём индексы (без ошибок, если уже есть)
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_entries(category)",
+                "CREATE INDEX IF NOT EXISTS idx_vault_tags ON vault_entries(tags)",
+                "CREATE INDEX IF NOT EXISTS idx_vault_username ON vault_entries(username)",
+                "CREATE INDEX IF NOT EXISTS idx_vault_updated ON vault_entries(updated_at)",
+            ]
+            for idx_sql in indexes:
+                try:
+                    c.execute(idx_sql)
+                except sqlite3.OperationalError:
+                    pass  # Index already exists
 
-        # Create deleted_entries table for soft delete
-        c.execute("""
+            # 5. Таблица для soft delete
+            c.execute("""
                 CREATE TABLE IF NOT EXISTS deleted_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     original_id TEXT,
@@ -181,6 +196,101 @@ class Database:
                     expires_at TIMESTAMP
                 )
             """)
+
+    def _safe_migrate_id_to_text(self, cursor):
+        """Безопасная миграция id INTEGER → TEXT с сохранением данных"""
+        print("⚠ Migrating id from INTEGER to TEXT...")
+
+        # Проверяем, есть ли данные
+        cursor.execute("SELECT COUNT(*) FROM vault_entries")
+        count = cursor.fetchone()[0]
+
+        if count == 0:
+            # Пустая таблица — просто пересоздаём
+            cursor.execute("DROP TABLE vault_entries")
+            cursor.execute("""
+                CREATE TABLE vault_entries (
+                    id TEXT PRIMARY KEY,
+                    encrypted_data BLOB,
+                    title TEXT NOT NULL,
+                    username TEXT,
+                    url TEXT,
+                    tags TEXT,
+                    category TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            return
+
+        # Есть данные — создаём временную таблицу
+        cursor.execute("""
+            CREATE TABLE vault_entries_temp (
+                id TEXT PRIMARY KEY,
+                encrypted_data BLOB,
+                title TEXT NOT NULL,
+                username TEXT,
+                url TEXT,
+                tags TEXT,
+                category TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Копируем данные, конвертируя id в TEXT
+        cursor.execute("""
+            INSERT INTO vault_entries_temp (id, title, username, url, tags, category, created_at, updated_at)
+            SELECT CAST(id AS TEXT), title, username, url,
+                   COALESCE(tags, ''), COALESCE(category, ''),
+                   COALESCE(created_at, CURRENT_TIMESTAMP),
+                   COALESCE(updated_at, CURRENT_TIMESTAMP)
+            FROM vault_entries
+        """)
+
+        # Заменяем таблицу
+        cursor.execute("DROP TABLE vault_entries")
+        cursor.execute("ALTER TABLE vault_entries_temp RENAME TO vault_entries")
+        print(f"✓ Migrated {count} entries to TEXT id")
+
+
+
+    def _migrate_id_to_text(self):
+        """Миграция id с INTEGER на TEXT"""
+        with self.transaction() as c:
+            # Создаём новую таблицу
+            c.execute("""
+                CREATE TABLE vault_entries_new (
+                    id TEXT PRIMARY KEY,
+                    encrypted_data BLOB,
+                    title TEXT NOT NULL,
+                    username TEXT,
+                    url TEXT,
+                    tags TEXT,
+                    category TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Копируем данные
+            c.execute("SELECT * FROM vault_entries")
+            rows = c.fetchall()
+
+            for row in rows:
+                old_id = str(row[0])  # Конвертируем INTEGER в TEXT
+                title = row[1] if len(row) > 1 else ''
+                username = row[2] if len(row) > 2 else ''
+                url = row[4] if len(row) > 4 else ''
+
+                c.execute("""
+                    INSERT INTO vault_entries_new (id, title, username, url)
+                    VALUES (?, ?, ?, ?)
+                """, (old_id, title, username, url))
+
+            # Заменяем таблицу
+            c.execute("DROP TABLE vault_entries")
+            c.execute("ALTER TABLE vault_entries_new RENAME TO vault_entries")
 
 
 

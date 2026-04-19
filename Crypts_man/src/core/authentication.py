@@ -3,8 +3,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 import time
 import logging
-from src.core.key_manager import KeyManager
-from src.core.events import events, EventType
+from Crypts_man.src.core.key_manager import KeyManager
+from Crypts_man.src.core.events import events, EventType
 
 logger = logging.getLogger(__name__)
 

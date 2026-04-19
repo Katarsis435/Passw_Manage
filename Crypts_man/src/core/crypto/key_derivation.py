@@ -101,3 +101,35 @@ class KeyManager:
         """Update activity timestamp (for auto-lock integration)"""
         # This will be used by auto-lock functionality in Sprint 7
         pass
+
+
+
+
+# src/core/crypto/key_derivation.py
+from Crypts_man.src.core.key_manager import KeyManager as MainKeyManager
+
+
+class KeyManagerWrapper:
+  """Wrapper to unify both KeyManager implementations"""
+
+  def __init__(self, config=None):
+    self._main = MainKeyManager(config)
+
+  def get_cached_encryption_key(self):
+    return self._main.get_cached_encryption_key()
+
+  def cache_encryption_key(self, key):
+    return self._main.cache_encryption_key(key)
+
+  def derive_encryption_key(self, password, salt):
+    return self._main.derive_encryption_key(password, salt)
+
+  def verify_password(self, password, stored_hash):
+    return self._main.verify_password(password, stored_hash)
+
+  def clear_cache(self):
+    return self._main.clear_cache()
+
+  def __getattr__(self, name):
+    # Forward any other calls to main KeyManager
+    return getattr(self._main, name)

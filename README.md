@@ -65,45 +65,45 @@ cryptosafe-manager/
 ├── src/
 │   ├── core/
 │   │   ├── crypto/
-│   │   │   ├── __init__.py
-│   │   │   ├── abstract.py       # EncryptionService abstract class
-│   │   │   └── placeholder.py    # AES256Placeholder (XOR)
+│   │   │   ├── abstract.py           # Абстрактный класс шифрования
+│   │   │   └── placeholder.py        # Заглушка (заменена на реальное шифрование)
+│   │   ├── vault/                    # НОВОЕ в Sprint 3
+│   │   │   ├── encryption_service.py # AES-256-GCM шифрование
+│   │   │   ├── entry_manager.py      # CRUD операции
+│   │   │   └── password_generator.py # Генератор паролей
 │   │   ├── __init__.py
-│   │   ├── events.py             # Event system
-│   │   ├── config.py             # Configuration manager
-│   │   ├── key_manager.py        # Key management stub
-│   │   └── state_manager.py      # State tracking
+│   │   ├── events.py                 # Система событий
+│   │   ├── config.py                 # Управление конфигурацией
+│   │   ├── key_manager.py            # Управление ключами
+│   │   ├── authentication.py         # Аутентификация
+│   │   └── state_manager.py          # Состояние приложения
 │   ├── database/
 │   │   ├── __init__.py
-│   │   ├── db.py                 # Database helper with migrations
-│   │   └── models.py             # (Future: SQLAlchemy models)
+│   │   └── db.py                     # Работа с SQLite
 │   └── gui/
-│       ├── main_window.py        # Main application window
-│       ├── __init__.py
-│       └── widgets/
-│           ├── __init__.py
-│           ├── password_entry.py # Password input with show/hide
-│           ├── secure_table.py   # Vault entries table
-│           └── audit_log_viewer.py # Audit log viewer stub
+│       ├── main_window.py            # Главное окно
+│       ├── widgets/
+│       │   ├── secure_table.py       # Таблица записей (обновлена)
+│       │   ├── password_entry.py     # Поле ввода пароля
+│       │   └── audit_log_viewer.py   # Просмотр аудита (заглушка)
+│       └── dialogs/                  # НОВОЕ в Sprint 3
+│           └── password_generator_dialog.py  # Диалог генерации
 ├── tests/
-│   ├── __init__.py
-│   ├── test_crypto.py            # Crypto unit tests
-│   ├── test_database.py          # Database unit tests
-│   ├── test_config.py            # SPR_2
-│   ├── test_db.py                # SPR_2
-│   ├── test_events.py            # Event system tests
-│   ├── test_integration.py       # Integration tests
-│   ├── test_key_derivation.py    # SPR_2
-│   ├── test_widgers.py           # SPR_2
-│   └── test_tkinter.py           # SPR_2
+│   ├── test_crypto.py                # Тесты шифрования
+│   ├── test_database.py              # Тесты БД
+│   ├── test_config.py                # Тесты конфигурации
+│   ├── test_events.py                # Тесты событий
+│   ├── test_integration.py           # Интеграционные тесты
+│   ├── test_key_derivation.py        # Тесты ключей
+│   ├── test_state_manager.py         # Тесты состояния
+│   └── test_widgets.py               # Тесты виджетов
 ├── .github/
 │   └── workflows/
-│       └── tests.yml             # GitHub Actions CI
-├── __init__.py
-├── main.py                       # Entry point
-├── requirements.txt              # Dependencies
-├── Dockerfile                    # Container stub (Sprint 8)
-└── README.md                     # This file
+│       └── tests.yml                 # CI/CD
+├── main.py                           # Точка входа
+├── requirements.txt                  # Зависимости
+├── README.md                         # Этот файл
+└── .gitignore
 ```
 # Технологии
 Python 3.8+ (я использую 3.13)

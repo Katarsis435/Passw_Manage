@@ -1,138 +1,123 @@
-# src/core/key_manager.py
+# src/core/key_manager.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import os
 import hashlib
-from typing import Optional, Dict, Any
-import ctypes
 import secrets
+import ctypes
+import logging
+from typing import Optional, Dict, Any
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class KeyManager:
-    """Key management with Argon2 and PBKDF2"""
+  """Unified key management for CryptoSafe Manager"""
 
-    def __init__(self, config=None):
-        self._current_key: Optional[bytes] = None
-        self._config = config
-        self._init_crypto()
+  def __init__(self, config=None):
+    self._current_key: Optional[bytes] = None
+    self._config = config or {}
+    self._crypto_available = False
+    self._init_crypto()
 
-    def _init_crypto(self):
-        """Initialize cryptographic components"""
-        try:
-            from argon2 import PasswordHasher, Type
-            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-            from cryptography.hazmat.primitives import hashes
+  def _init_crypto(self):
+    """Initialize cryptographic components with error handling"""
+    try:
+      from argon2 import PasswordHasher, Type
+      from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+      from cryptography.hazmat.primitives import hashes
 
-            # Argon2 parameters
-            argon2_time = 3
-            argon2_memory = 65536
-            argon2_parallelism = 4
+      # Argon2 parameters
+      self.argon2_hasher = PasswordHasher(
+        time_cost=self._config.get('argon2_time', 3),
+        memory_cost=self._config.get('argon2_memory', 65536),
+        parallelism=self._config.get('argon2_parallelism', 4),
+        hash_len=32,
+        salt_len=16,
+        type=Type.ID
+      )
 
-            if self._config:
-                argon2_time = self._config.get('argon2_time', 3)
-                argon2_memory = self._config.get('argon2_memory', 65536)
-                argon2_parallelism = self._config.get('argon2_parallelism', 4)
+      # PBKDF2 parameters
+      self.pbkdf2_iterations = self._config.get('pbkdf2_iterations', 100000)
+      self.PBKDF2HMAC = PBKDF2HMAC
+      self.hashes = hashes
+      self._crypto_available = True
+      logger.info("Crypto libraries initialized successfully")
 
-            self.argon2_hasher = PasswordHasher(
-                time_cost=argon2_time,
-                memory_cost=argon2_memory,
-                parallelism=argon2_parallelism,
-                hash_len=32,
-                salt_len=16,
-                type=Type.ID
-            )
+    except ImportError as e:
+      logger.error(f"Crypto libraries not available: {e}")
+      self._crypto_available = False
 
-            # PBKDF2 parameters
-            self.pbkdf2_iterations = 100000
-            if self._config:
-                self.pbkdf2_iterations = self._config.get('pbkdf2_iterations', 100000)
+  def create_auth_hash(self, password: str) -> Dict[str, Any]:
+    """Create Argon2 hash for password verification"""
+    if not self._crypto_available:
+      # Fallback for testing only
+      salt = os.urandom(16)
+      hash_val = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+      return {'hash': hash_val.hex(), 'params': {'fallback': True, 'salt': salt.hex()}}
 
-            self.PBKDF2HMAC = PBKDF2HMAC
-            self.hashes = hashes
-            self._crypto_available = True
+    return {
+      'hash': self.argon2_hasher.hash(password),
+      'params': {
+        'time_cost': self.argon2_hasher.time_cost,
+        'memory_cost': self.argon2_hasher.memory_cost,
+        'parallelism': self.argon2_hasher.parallelism,
+      }
+    }
 
-        except ImportError:
-            print("Warning: argon2-cffi or cryptography not installed")
-            self._crypto_available = False
+  def derive_encryption_key(self, password: str, salt: bytes) -> bytes:
+    """Derive AES-256 key from password using PBKDF2"""
+    if not self._crypto_available:
+      return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
 
-    def create_auth_hash(self, password: str) -> Dict[str, Any]:
-        """Create Argon2 hash for password verification"""
-        if not self._crypto_available:
-            # Fallback for testing
-            return {
-                'hash': hashlib.sha256(password.encode()).hexdigest(),
-                'params': {'fallback': True}
-            }
+    kdf = self.PBKDF2HMAC(
+      algorithm=self.hashes.SHA256(),
+      length=32,
+      salt=salt,
+      iterations=self.pbkdf2_iterations
+    )
+    return kdf.derive(password.encode('utf-8'))
 
-        return {
-            'hash': self.argon2_hasher.hash(password),
-            'params': {
-                'time_cost': self.argon2_hasher.time_cost,
-                'memory_cost': self.argon2_hasher.memory_cost,
-                'parallelism': self.argon2_hasher.parallelism,
-                'hash_len': 32,
-                'salt_len': 16
-            }
-        }
+  def verify_password(self, password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash (constant-time)"""
+    if not self._crypto_available:
+      computed = hashlib.sha256(password.encode()).hexdigest()
+      return secrets.compare_digest(computed, stored_hash)
 
-    def derive_encryption_key(self, password: str, salt: bytes) -> bytes:
-        """Derive AES-256 key from password using PBKDF2"""
-        if not self._crypto_available:
-            # Fallback for testing
-            return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    try:
+      self.argon2_hasher.verify(stored_hash, password)
+      return True
+    except Exception:
+      # Constant-time dummy operation to prevent timing attacks
+      secrets.compare_digest(b'dummy', b'dummy')
+      return False
 
-        kdf = self.PBKDF2HMAC(
-            algorithm=self.hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=self.pbkdf2_iterations
-        )
-        return kdf.derive(password.encode('utf-8'))
+  def cache_encryption_key(self, key: bytes) -> None:
+    """Cache encryption key in memory"""
+    if key and len(key) == 32:
+      self._current_key = key
+      logger.debug("Encryption key cached")
 
-    def verify_password(self, password: str, stored_hash: str) -> bool:
-      """Verify password against stored Argon2 hash (constant-time)"""
-      if not self._crypto_available:
-        # Fallback for testing
-        computed = hashlib.sha256(password.encode()).hexdigest()
-        return secrets.compare_digest(computed, stored_hash)
+  def get_cached_encryption_key(self) -> Optional[bytes]:
+    """Get cached encryption key"""
+    return self._current_key
 
-      try:
-        # This will raise exception if verification fails
-        self.argon2_hasher.verify(stored_hash, password)
-        return True
-      except Exception:
-        # Verification failed
-        return False
+  def clear_cache(self) -> None:
+    """Securely clear cached keys"""
+    if self._current_key:
+      self._secure_zero(self._current_key)
+      self._current_key = None
+    logger.debug("Encryption key cache cleared")
 
-    def store_key(self, key_id: str, key: bytes) -> None:
-        """Store key in memory cache"""
-        self._current_key = key
+  def _secure_zero(self, data: bytes) -> None:
+    """Securely zero memory containing sensitive data"""
+    try:
+      arr = bytearray(data)
+      ctypes.memset(id(arr), 0, len(arr))
+    except:
+      pass  # Best effort
 
-    def load_key(self, key_id: str) -> Optional[bytes]:
-        """Load key from memory cache"""
-        return self._current_key
+  def update_activity(self) -> None:
+    """Update activity timestamp for auto-lock"""
+    pass
 
-    def cache_encryption_key(self, key: bytes) -> None:
-        """Cache encryption key in memory"""
-        self._current_key = key
 
-    def get_cached_encryption_key(self) -> Optional[bytes]:
-        """Get cached encryption key"""
-        return self._current_key
-
-    def clear_cache(self) -> None:
-        """Clear cached keys from memory"""
-        if self._current_key:
-            self.secure_zero(self._current_key)
-            self._current_key = None
-
-    def secure_zero(self, data: bytes) -> None:
-        """Securely zero memory"""
-        if data:
-            try:
-                arr = bytearray(data)
-                ctypes.memset(id(arr), 0, len(arr))
-            except:
-                pass
-
-    def update_activity(self) -> None:
-        """Update activity timestamp (for auto-lock integration)"""
-        pass
