@@ -1,7 +1,7 @@
 # tests/test_core/test_state_manager.py
 import unittest
 import time
-from src.core.state_manager import StateManager
+from Crypts_man.src.core.state_manager import StateManager
 
 
 class TestStateManager(unittest.TestCase):

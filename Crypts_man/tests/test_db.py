@@ -3,7 +3,7 @@ import unittest
 import os
 import tempfile
 import shutil
-from src.database.db import Database
+from Crypts_man.src.database.db import Database
 
 
 class TestDatabase(unittest.TestCase):

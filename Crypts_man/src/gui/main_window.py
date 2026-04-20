@@ -1,5 +1,6 @@
 # src/gui/main_window.py
 import tkinter as tk
+import os
 from datetime import datetime
 from tkinter import ttk, messagebox
 

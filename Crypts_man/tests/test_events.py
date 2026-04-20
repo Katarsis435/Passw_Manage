@@ -1,6 +1,6 @@
 # tests/test_core/test_events.py
 import unittest
-from src.core.events import EventSystem, EventType
+from Crypts_man.src.core.events import EventSystem, EventType
 
 
 class TestEventSystem(unittest.TestCase):

@@ -2,7 +2,6 @@
 import unittest
 import tkinter as tk
 
-
 class TestSecureTable(unittest.TestCase):
   """Tests for secure table widget"""
 
@@ -10,7 +9,7 @@ class TestSecureTable(unittest.TestCase):
     self.root = tk.Tk()
     self.root.withdraw()
 
-    from src.gui.widgets.secure_table import SecureTable
+    from Crypts_man.src.gui.widgets.secure_table import SecureTable
     self.table = SecureTable(self.root)
 
   def tearDown(self):

@@ -2,8 +2,7 @@
 import unittest
 import os
 import tempfile
-import json
-from src.core.config import Config
+from Crypts_man.src.core.config import Config
 
 
 class TestConfig(unittest.TestCase):

@@ -1,8 +1,8 @@
 # tests/test_crypto.py
 import unittest
 import os
-from src.core.crypto.placeholder import AES256Placeholder
-from src.core.key_manager import KeyManager
+from Crypts_man.src.core.crypto.placeholder import AES256Placeholder
+from Crypts_man.src.core.key_manager import KeyManager
 
 
 class TestCrypto(unittest.TestCase):

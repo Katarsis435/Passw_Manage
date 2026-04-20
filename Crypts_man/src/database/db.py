@@ -253,44 +253,51 @@ class Database:
         cursor.execute("ALTER TABLE vault_entries_temp RENAME TO vault_entries")
         print(f"✓ Migrated {count} entries to TEXT id")
 
+    def _migrate_id_to_text(self, cursor):
+        """Миграция id INTEGER → TEXT с сохранением ВСЕХ колонок"""
+        print("⚠ Migrating id from INTEGER to TEXT...")
+
+        # Создаём новую таблицу со ВСЕМИ колонками из Sprint 1+2+3
+        cursor.execute("""
+            CREATE TABLE vault_entries_new (
+                id TEXT PRIMARY KEY,
+                encrypted_data BLOB,
+                title TEXT NOT NULL,
+                username TEXT,
+                url TEXT,
+                notes TEXT,
+                tags TEXT,
+                category TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Копируем данные (с учётом старых колонок)
+        cursor.execute("""
+            INSERT INTO vault_entries_new
+            (id, title, username, url, notes, tags, category, created_at, updated_at)
+            SELECT
+                CAST(id AS TEXT),
+                title,
+                username,
+                url,
+                COALESCE(notes, ''),
+                COALESCE(tags, ''),
+                COALESCE(category, ''),
+                COALESCE(created_at, CURRENT_TIMESTAMP),
+                COALESCE(updated_at, CURRENT_TIMESTAMP)
+            FROM vault_entries
+        """)
+
+        # Заменяем таблицу
+        cursor.execute("DROP TABLE vault_entries")
+        cursor.execute("ALTER TABLE vault_entries_new RENAME TO vault_entries")
+        print("✓ Migration completed with all columns")
 
 
-    def _migrate_id_to_text(self):
-        """Миграция id с INTEGER на TEXT"""
-        with self.transaction() as c:
-            # Создаём новую таблицу
-            c.execute("""
-                CREATE TABLE vault_entries_new (
-                    id TEXT PRIMARY KEY,
-                    encrypted_data BLOB,
-                    title TEXT NOT NULL,
-                    username TEXT,
-                    url TEXT,
-                    tags TEXT,
-                    category TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
 
-            # Копируем данные
-            c.execute("SELECT * FROM vault_entries")
-            rows = c.fetchall()
 
-            for row in rows:
-                old_id = str(row[0])  # Конвертируем INTEGER в TEXT
-                title = row[1] if len(row) > 1 else ''
-                username = row[2] if len(row) > 2 else ''
-                url = row[4] if len(row) > 4 else ''
-
-                c.execute("""
-                    INSERT INTO vault_entries_new (id, title, username, url)
-                    VALUES (?, ?, ?, ?)
-                """, (old_id, title, username, url))
-
-            # Заменяем таблицу
-            c.execute("DROP TABLE vault_entries")
-            c.execute("ALTER TABLE vault_entries_new RENAME TO vault_entries")
 
 
 
@@ -415,7 +422,7 @@ class Database:
         """Add a vault entry"""
         with self.cursor() as c:
             c.execute("""
-                INSERT INTO vault_entries (title, username, encrypted_password, url, notes, tags)
+                INSERT INTO vault_entries (title, username, encrypted_data, url, notes, tags)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (title, username, password, url, notes, tags))
             return c.lastrowid
@@ -466,7 +473,7 @@ class Database:
 
     def update_entry(self, entry_id: int, **kwargs) -> bool:
         """Update a vault entry"""
-        allowed_fields = ['title', 'username', 'encrypted_password', 'url', 'notes', 'tags']
+        allowed_fields = ['title', 'username', 'encrypted_data', 'url', 'notes', 'tags']
         updates = []
         values = []
 
