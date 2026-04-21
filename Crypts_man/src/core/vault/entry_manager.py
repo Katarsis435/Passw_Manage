@@ -1,6 +1,7 @@
 # src/core/vault/entry_manager.py (updated with full CRUD)
 import uuid
 import json
+import sqlite3
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import logging
@@ -159,11 +160,28 @@ class EntryManager:
             logger.error(f"Failed to decrypt entry {entry_id}: {e}")
             return None
 
-    # src/core/vault/entry_manager.py - В методе get_all_entries()
     def get_all_entries(self, limit: int = 1000, offset: int = 0,
                         search: str = None, category: str = None) -> List[Dict[str, Any]]:
-        """Get entries formatted for GUI table - COMPATIBLE VERSION"""
-        # ... [код запроса остаётся без изменений] ...
+        """Get entries formatted for GUI table."""
+        query = """
+            SELECT id, encrypted_data, title, username, url, category, tags, created_at, updated_at
+            FROM vault_entries
+            WHERE 1=1
+        """
+        params = []
+        if search:
+            query += " AND (title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ? OR category LIKE ?)"
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern, search_pattern])
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+        query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        with self.db.cursor() as c:
+            c.execute(query, params)
+            rows = c.fetchall()
 
         entries = []
         for row in rows:

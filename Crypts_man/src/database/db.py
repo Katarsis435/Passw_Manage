@@ -5,6 +5,7 @@ import queue
 import time
 import json
 import os
+import uuid
 import logging
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any, Callable
@@ -38,7 +39,7 @@ class Database:
 
         # Then initialize connection pool
         self._init_connection_pool()
-        self.migrate_to_sprint3()  #ЭТО ВАЖНО
+        #self.migrate_to_sprint3()  #ЭТО ВАЖНО
 
     def _init_database_schema(self):
         """Initialize database schema using a temporary connection"""
@@ -61,13 +62,14 @@ class Database:
                 # Create tables
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS vault_entries (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id TEXT PRIMARY KEY,
+                        encrypted_data BLOB,
                         title TEXT NOT NULL,
                         username TEXT,
-                        encrypted_password BLOB,
                         url TEXT,
                         notes TEXT,
                         tags TEXT,
+                        category TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -77,7 +79,7 @@ class Database:
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         action TEXT NOT NULL,
-                        entry_id INTEGER,
+                        entry_id TEXT,
                         details TEXT,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         signature TEXT,
@@ -418,14 +420,20 @@ class Database:
         return [self._executor.submit(func) for func in funcs]
 
     def add_entry(self, title: str, username: str = "", password: bytes = b"",
-                  url: str = "", notes: str = "", tags: str = "") -> int:
-        """Add a vault entry"""
+                  url: str = "", notes: str = "", tags: str = "") -> str:
+        """Add a vault entry - password param goes into encrypted_data column"""
+        entry_id = str(uuid.uuid4())
         with self.cursor() as c:
             c.execute("""
-                INSERT INTO vault_entries (title, username, encrypted_data, url, notes, tags)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (title, username, password, url, notes, tags))
-            return c.lastrowid
+                INSERT INTO vault_entries (id, title, username, encrypted_data, url, notes, tags)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (entry_id, title, username, password, url, notes, tags))  # password → encrypted_data
+            return entry_id
+
+
+
+
+
 
     def add_entry_async(self, title: str, username: str = "", password: bytes = b"",
                         url: str = "", notes: str = "", tags: str = "") -> Future:
@@ -460,18 +468,18 @@ class Database:
         """Get vault entries asynchronously"""
         return self.execute_async(self.get_entries, limit, offset, search, tags)
 
-    def get_entry_by_id(self, entry_id: int) -> Optional[Dict[str, Any]]:
+    def get_entry_by_id(self, entry_id: str) -> Optional[Dict[str, Any]]:
         """Get a single entry by ID"""
         with self.cursor() as c:
             c.execute("SELECT * FROM vault_entries WHERE id = ?", (entry_id,))
             row = c.fetchone()
             return dict(row) if row else None
 
-    def get_entry_by_id_async(self, entry_id: int) -> Future:
+    def get_entry_by_id_async(self, entry_id: str) -> Future:
         """Get a single entry asynchronously"""
         return self.execute_async(self.get_entry_by_id, entry_id)
 
-    def update_entry(self, entry_id: int, **kwargs) -> bool:
+    def update_entry(self, entry_id: str, **kwargs) -> bool:
         """Update a vault entry"""
         allowed_fields = ['title', 'username', 'encrypted_data', 'url', 'notes', 'tags']
         updates = []
@@ -495,11 +503,11 @@ class Database:
             """, values)
             return c.rowcount > 0
 
-    def update_entry_async(self, entry_id: int, **kwargs) -> Future:
+    def update_entry_async(self, entry_id: str, **kwargs) -> Future:
         """Update a vault entry asynchronously"""
         return self.execute_async(self.update_entry, entry_id, **kwargs)
 
-    def delete_entry(self, entry_id: int) -> bool:
+    def delete_entry(self, entry_id: str) -> bool:
         """Delete a vault entry"""
         with self.transaction() as c:
             # Delete audit logs referencing this entry first
@@ -508,7 +516,7 @@ class Database:
             c.execute("DELETE FROM vault_entries WHERE id = ?", (entry_id,))
             return c.rowcount > 0
 
-    def delete_entry_async(self, entry_id: int) -> Future:
+    def delete_entry_async(self, entry_id: str) -> Future:
         """Delete a vault entry asynchronously"""
         return self.execute_async(self.delete_entry, entry_id)
 
@@ -529,7 +537,7 @@ class Database:
         """Delete multiple entries asynchronously"""
         return self.execute_async(self.delete_entries_batch, entry_ids)
 
-    def add_audit_log(self, action: str, entry_id: Optional[int] = None,
+    def add_audit_log(self, action: str, entry_id: Optional[str] = None,
                       details: str = "", signature: str = "") -> int:
         """Add an audit log entry"""
         with self.cursor() as c:
@@ -539,13 +547,13 @@ class Database:
             """, (action, entry_id, details, signature))
             return c.lastrowid
 
-    def add_audit_log_async(self, action: str, entry_id: Optional[int] = None,
+    def add_audit_log_async(self, action: str, entry_id: Optional[str] = None,
                             details: str = "", signature: str = "") -> Future:
         """Add an audit log entry asynchronously"""
         return self.execute_async(self.add_audit_log, action, entry_id, details, signature)
 
     def get_audit_logs(self, limit: int = 100, offset: int = 0,
-                       entry_id: Optional[int] = None) -> List[Dict[str, Any]]:
+                       entry_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get audit logs with pagination"""
         with self.cursor() as c:
             if entry_id:
