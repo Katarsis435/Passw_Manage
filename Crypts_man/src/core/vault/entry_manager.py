@@ -473,3 +473,47 @@ class EntryManager:
             if self.delete_entry(entry_id, soft_delete):
                 deleted += 1
         return deleted
+
+    def get_all_entries_metadata(self, limit: int = 1000, offset: int = 0,
+                                 search: str = None, category: str = None) -> List[Dict[str, Any]]:
+        """Get entries WITHOUT decrypting password/notes (SEC-1 compliant)"""
+        query = """
+                SELECT id, title, username, url, category, tags, created_at, updated_at
+                FROM vault_entries
+                WHERE 1=1
+            """
+        params = []
+
+        # ПРОСТОЙ РАБОЧИЙ ПОИСК
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            query += " AND (title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ?)"
+            params.extend([search_term, search_term, search_term, search_term])
+
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+
+        query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        with self.db.cursor() as c:
+            print(f"🔍 SQL QUERY: {query}")  # Временный отладчик
+            print(f"🔍 PARAMS: {params}")  # Временный отладчик
+            c.execute(query, params)
+            rows = c.fetchall()
+            print(f"🔍 ROWS FOUND: {len(rows)}")  # Временный отладчик
+
+        entries = []
+        for row in rows:
+            entries.append({
+                'id': str(row[0]),
+                'title': row[1],
+                'username': row[2] if row[2] else '',
+                'url': row[3] if row[3] else '',
+                'category': row[4] if row[4] else '',
+                'tags': row[5] if row[5] else '',
+                'created_at': row[6],
+                'updated_at': row[7]
+            })
+        return entries

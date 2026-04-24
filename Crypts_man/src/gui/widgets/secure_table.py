@@ -276,3 +276,14 @@ class SecureTable(ttk.Frame):
     def resize_column(self, col_id, width):
         """Resize a column"""
         self.tree.column(col_id, width=width)
+
+    def get_decrypted_entry(self, entry_id, entry_manager):
+        """Get decrypted entry on demand (SEC-1 compliance)"""
+        if hasattr(self, '_decrypted_cache'):
+            return self._decrypted_cache.get(entry_id)
+        return None
+
+    def clear_decrypted_cache(self):
+        """Clear cached decrypted entries"""
+        if hasattr(self, '_decrypted_cache'):
+            self._decrypted_cache.clear()

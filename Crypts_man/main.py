@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# python -m unittest discover -s Crypts_man/tests -v
 """CryptoSafe Manager - Main Entry Point"""
 
 import sys

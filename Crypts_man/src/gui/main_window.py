@@ -388,6 +388,19 @@ class MainWindow:
                 error_label.config(text="Password must be at least 8 characters");
                 return
 
+
+            # Check password strength
+            from Crypts_man.src.core.vault.password_generator import PasswordGenerator
+            pg = PasswordGenerator()
+            strength = pg.estimate_strength(pwd)
+            if strength['score'] < 2:  # Weak or Very Weak
+                if not messagebox.askyesno("Weak Password",
+                                           f"Your password is {strength['rating']}.\n\n"
+                                           f"Suggestions:\n" + "\n".join(f"• {s}" for s in strength['feedback'][:3]) +
+                                           "\n\nContinue anyway?"):
+                                           return
+
+
             from Crypts_man.src.core.key_manager import KeyManager
             km = KeyManager(self.config)
             auth_res = km.create_auth_hash(pwd)
@@ -400,14 +413,8 @@ class MainWindow:
             parent.destroy()
             self._show_login()
 
+
         ttk.Button(main_frame, text="Create Vault", command=do_setup).pack(pady=10)
-
-
-
-
-
-
-
 
 
 
@@ -429,9 +436,15 @@ class MainWindow:
             category = self.category_filter.get()
             if category == "All":
                 category = None
-            search = self.search_var.get().strip() or None
 
-            entries = self.entry_manager.get_all_entries(search=search, category=category)
+
+            search = self.search_var.get().strip() or None
+            print(f"🔍 SEARCH DEBUG: search='{search}', category='{category}'")
+            print(f"DEBUG: search='{search}', category='{category}'")  # <-- ДОБАВЬ ЭТО
+            entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
+            print(f"DEBUG: found {len(entries)} entries")  # <-- И ЭТО
+            print(f"🔍 SEARCH DEBUG: found {len(entries)} entries")
+
 
             table_data = []
             for entry in entries:
@@ -439,6 +452,7 @@ class MainWindow:
                     'id': str(entry.get('id', '')),
                     'title': entry.get('title', ''),
                     'username': entry.get('username', ''),
+                    'password_masked': '••••••••',
                     'url': entry.get('url', ''),
                     'updated_at': str(entry.get('updated_at', ''))[:10] if entry.get('updated_at') else '',
                     'category': entry.get('category', '')
@@ -788,13 +802,19 @@ class MainWindow:
 
     def _on_search_change(self, *args):
         """Handle search text change with debouncing"""
-        if hasattr(self, '_search_after'):
-            self.root.after_cancel(self._search_after)
-        self._search_after = self.root.after(300, self._perform_search)
+        if hasattr(self, '_search_after') and self._search_after is not None:
+            try:
+                self.root.after_cancel(self._search_after)
+            except:
+                pass
+        self._search_after = self.root.after(500, self._perform_search)
 
     def _perform_search(self):
         """Perform actual search"""
+        print(f"🔍 PERFORMING SEARCH FOR: '{self.search_var.get()}'")
         self._load_vault_data()
+        self.table.refresh()
+        self.table.update_idletasks()
 
     def _clear_search(self):
         """Clear search field"""
