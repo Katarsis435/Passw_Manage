@@ -491,7 +491,7 @@ class MainWindow:
         row = 0
 
         # Title
-        ttk.Label(form_frame, text="Title*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Title*: ", foreground="black").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
@@ -505,15 +505,47 @@ class MainWindow:
         row += 1
 
         # Password
-        ttk.Label(form_frame, text="Password: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Password*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        strength_label = ttk.Label(form_frame, text="")
+
+        # Фрейм для силы пароля и предупреждения (рядом)
+        strength_frame = ttk.Frame(form_frame)
+        strength_frame.grid(row=row + 1, column=1, sticky=tk.W, padx=5, pady=2)
+
+        strength_label = ttk.Label(strength_frame, text="")
+        strength_label.pack(side=tk.LEFT)
+
+        warning_label = ttk.Label(strength_frame, text="", foreground="orange")
+        warning_label.pack(side=tk.LEFT, padx=10)
 
         def update_strength(*args):
-            self._update_password_strength(password_entry.get(), strength_label)
+            pwd = password_entry.get()
+            if not pwd:
+                strength_label.config(text="")
+                warning_label.config(text="")
+                return
+            strength = self.password_generator.estimate_strength(pwd)
+
+            # Цвета и текст для сложности
+            if strength['score'] == 0:
+                strength_label.config(text="Очень слабый", foreground="red")
+                warning_label.config(text="Используй 8+ символов, цифры, спецсимволы!")
+            elif strength['score'] == 1:
+                strength_label.config(text="Слабый", foreground="orange")
+                warning_label.config(text="Добавь цифры и спецсимволы")
+            elif strength['score'] == 2:
+                strength_label.config(text="Средний", foreground="gold")
+                warning_label.config(text="")  # Чистим предупреждение
+            elif strength['score'] == 3:
+                strength_label.config(text="Сильный", foreground="lightgreen")
+                warning_label.config(text="")
+            else:
+                strength_label.config(text="Очень сильный", foreground="green")
+                warning_label.config(text="")
+
         password_entry.bind('<KeyRelease>', update_strength)
 
         def generate_and_set():
@@ -521,11 +553,15 @@ class MainWindow:
                 password_entry.delete(0, tk.END)
                 password_entry.insert(0, pwd)
                 update_strength()
+
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
 
         ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
         fields['password'] = password_entry
-        row += 1
+        row += 2  # Важно: увеличиваем на 2 из-за strength_frame
+
+
+
 
         # URL
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
@@ -557,29 +593,91 @@ class MainWindow:
 
         form_frame.grid_columnconfigure(1, weight=1)
 
+
+
+        def validate_url(url):
+            """Простая проверка URL"""
+            if not url:
+                return True  # URL может быть пустым
+            # Должен содержать . или :// или начинаться с http:// или https://
+            if '.' in url or '://' in url or url.startswith('localhost'):
+                return True
+            # Простой шаблон для доменов
+            if any(c.isalpha() for c in url) and '.' in url:
+                return True
+            return False
+
+        def validate_title(title):
+            """Заголовок не может быть только цифрами или только спецсимволами"""
+            if not title:
+                return False
+            # Хотя бы одна буква
+            return any(c.isalpha() for c in title)
+
+        def validate_username(username):
+            """Username - любое значение (может быть пустым)"""
+            return True  # Не блокируем, пользователь сам знает
+
+        def validate_tags(tags):
+            """Теги - буквы, цифры, запятые, пробелы, дефисы"""
+            if not tags:
+                return True
+            allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
+            return all(c in allowed for c in tags)
+
+        def show_field_error(field_name, message):
+            """Показать ошибку под полем"""
+            error_label = ttk.Label(form_frame, text=f"⚠ {message}", foreground="red")
+            error_label.grid(row=row, column=1, sticky=tk.W, padx=5)
+            # Удалить через 3 секунды
+            dialog.after(3000, error_label.destroy)
+
         def save():
+            # Валидация Title
             title = fields['title'].get().strip()
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
+            if not any(c.isalpha() for c in title):
+                messagebox.showerror("Error", "Title must contain at least one letter")
+                return
+
+            # Валидация URL
+            url = fields['url'].get().strip()
+            if url:
+                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
+                if not is_valid_url:
+                    messagebox.showerror("Error", f"'{url}' is not a valid URL!")
+                    return
+
+            # Валидация Tags
+            tags = fields['tags'].get().strip()
+            if tags:
+                allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
+                if not all(c in allowed for c in tags):
+                    messagebox.showerror("Error",
+                                         "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
+                    return
+
+            # Проверка пароля
             password = fields['password'].get()
             if not password:
                 if not messagebox.askyesno("Warning", "Password is empty. Continue?"):
                     return
 
+            # Проверка силы пароля (только лог, не блокируем)
             if password:
                 strength = self.password_generator.estimate_strength(password)
                 if strength['score'] < 2:
-                    if not messagebox.askyesno("Weak Password", f"Password is {strength['rating']}. Continue anyway?"):
-                        return
+                    print(f"Слабый пароль: {strength['rating']}")
 
             entry_data = {
                 'title': title,
                 'username': fields['username'].get().strip(),
                 'password': password,
-                'url': fields['url'].get().strip(),
+                'url': url,
                 'category': fields['category'].get(),
-                'tags': fields['tags'].get().strip(),
+                'tags': tags,
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
 
@@ -591,6 +689,16 @@ class MainWindow:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save entry: {e}")
 
+
+
+
+
+
+
+
+
+
+
         button_frame = ttk.Frame(scrollable_frame)
         button_frame.pack(fill=tk.X, pady=10)
         ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
@@ -598,6 +706,17 @@ class MainWindow:
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+
+
+
+
+
+
+
+
+
+
 
     def _update_password_strength(self, password, label):
         """Update password strength display"""
@@ -619,6 +738,7 @@ class MainWindow:
             return
 
         entry_id = selected.get('id')
+        print(f"DEBUG EDIT: entry_id={entry_id}")
         try:
             entry = self.entry_manager.get_entry(entry_id)
         except Exception:
@@ -669,10 +789,29 @@ class MainWindow:
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
         password_entry.insert(0, entry.get('password', ''))
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+
+
+
         strength_label = ttk.Label(form_frame, text="")
+        strength_label.grid(row=row+1, column=1, sticky=tk.W, padx=5, pady=2)
 
         def update_strength(*args):
-            self._update_password_strength(password_entry.get(), strength_label)
+            pwd = password_entry.get()
+            if not pwd:
+                strength_label.config(text="")
+                return
+            strength = self.password_generator.estimate_strength(pwd)
+            if strength['score'] == 0:
+                strength_label.config(text="Очень слабый", foreground="red")
+            elif strength['score'] == 1:
+                strength_label.config(text="Слабый", foreground="orange")
+            elif strength['score'] == 2:
+                strength_label.config(text="Средний", foreground="gold")
+            elif strength['score'] == 3:
+                strength_label.config(text="Сильный", foreground="lightgreen")
+            else:
+                strength_label.config(text="Очень сильный", foreground="green")
 
         password_entry.bind('<KeyRelease>', update_strength)
         update_strength()
@@ -724,18 +863,42 @@ class MainWindow:
         form_frame.grid_columnconfigure(1, weight=1)
 
         def save():
-            updated_data = {
-                'title': fields['title'].get().strip(),
-                'username': fields['username'].get().strip(),
-                'password': fields['password'].get(),
-                'url': fields['url'].get().strip(),
-                'category': fields['category'].get(),
-                'tags': fields['tags'].get().strip(),
-                'notes': fields['notes'].get(1.0, tk.END).strip()
-            }
-            if not updated_data['title']:
+            # Валидация Title
+            title = fields['title'].get().strip()
+            if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
+            if not any(c.isalpha() for c in title):
+                messagebox.showerror("Error", "Title must contain at least one letter")
+                return
+
+            # Валидация URL
+            url = fields['url'].get().strip()
+            if url:
+                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
+                if not is_valid_url:
+                    if not messagebox.askyesno("Warning",
+                                               f"'{url}' doesn't look like a valid URL.\nContinue anyway?"):
+                        return
+
+            # Валидация Tags
+            tags = fields['tags'].get().strip()
+            if tags:
+                allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
+                if not all(c in allowed for c in tags):
+                    messagebox.showerror("Error",
+                                         "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
+                    return
+
+            updated_data = {
+                'title': title,
+                'username': fields['username'].get().strip(),
+                'password': fields['password'].get(),
+                'url': url,
+                'category': fields['category'].get(),
+                'tags': tags,
+                'notes': fields['notes'].get(1.0, tk.END).strip()
+            }
 
             try:
                 result = self.entry_manager.update_entry(entry_id, updated_data)
@@ -747,6 +910,10 @@ class MainWindow:
                     messagebox.showerror("Error", "Failed to update entry")
             except Exception as e:
                 messagebox.showerror("Error", f"Update failed: {e}")
+
+
+
+
 
         ttk.Button(form_frame, text="Save", command=save).grid(row=row, column=0, columnspan=2, pady=10)
         ttk.Button(form_frame, text="Cancel", command=dialog.destroy).grid(row=row + 1, column=0, columnspan=2, pady=5)
@@ -771,7 +938,9 @@ class MainWindow:
             return
 
         deleted = 0
+
         for row in selected_rows:
+            print(f"DEBUG DELETE: id={row.get('id')}")
             try:
                 if self.entry_manager.delete_entry(str(row.get('id', '')), soft_delete=True):
                     deleted += 1

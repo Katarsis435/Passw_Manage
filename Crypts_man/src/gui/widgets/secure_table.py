@@ -261,8 +261,19 @@ class SecureTable(ttk.Frame):
 
     def get_selected_row(self):
         """Get first selected row data"""
-        rows = self.get_selected_rows()
-        return rows[0] if rows else None
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        item = selection[0]
+        values = self.tree.item(item)['values']
+        if not values:
+            return None
+        row = {}
+        for i, col_id in enumerate(self.column_order):
+            if i < len(values):
+                row[col_id] = values[i]
+        row['id'] = item  # ID из iid
+        return row
 
     def clear_selection(self):
         """Clear current selection"""

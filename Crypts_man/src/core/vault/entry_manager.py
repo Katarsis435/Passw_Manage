@@ -318,6 +318,8 @@ class EntryManager:
         Returns:
             True if successful
         """
+        print(f"DEBUG ENTRY_MANAGER DELETE: id={entry_id}, soft={soft_delete}")
+
         with self.db.transaction() as c:
             # Get entry before deletion
             c.execute("SELECT encrypted_data, title FROM vault_entries WHERE id = ?", (entry_id,))
@@ -484,11 +486,35 @@ class EntryManager:
             """
         params = []
 
-        # ПРОСТОЙ РАБОЧИЙ ПОИСК
+        # FUZZY SEARCH - прощает опечатки
         if search and search.strip():
-            search_term = f"%{search.strip()}%"
-            query += " AND (title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ?)"
-            params.extend([search_term, search_term, search_term, search_term])
+            search_term = search.strip()
+
+            # Для каждого слова в поиске
+            words = search_term.split()
+
+            for word in words:
+                # Создаем варианты с возможными опечатками
+                patterns = []
+
+                # Оригинал
+                patterns.append(f"%{word}%")
+
+                # Если слово длинное - пробуем без последней буквы
+                if len(word) > 3:
+                  patterns.append(f"%{word[:-1]}%")
+
+                # Если слово длинное - пробуем с удвоенной первой буквой (опечатка)
+                if len(word) > 2:
+                  patterns.append(f"%{word[0]}{word}%")
+
+                # Добавляем условия для каждого паттерна
+                sub_conditions = []
+                for pattern in patterns:
+                    sub_conditions.append("(title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ?)")
+                    params.extend([pattern, pattern, pattern, pattern])
+
+                query += " AND (" + " OR ".join(sub_conditions[:2]) + ")"  # Берем первые 2 паттерна для скорости
 
         if category:
             query += " AND category = ?"
@@ -498,11 +524,8 @@ class EntryManager:
         params.extend([limit, offset])
 
         with self.db.cursor() as c:
-            print(f"🔍 SQL QUERY: {query}")  # Временный отладчик
-            print(f"🔍 PARAMS: {params}")  # Временный отладчик
             c.execute(query, params)
             rows = c.fetchall()
-            print(f"🔍 ROWS FOUND: {len(rows)}")  # Временный отладчик
 
         entries = []
         for row in rows:
