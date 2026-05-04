@@ -200,4 +200,4 @@ cryptosafe-manager/
 MIT
 
 ## Контакты
-Проект разработан в рамках учебного курса. По вопросам: [GitHub Issues](https://github.com/Katarsis435/cryptosafe-manager/issues)
+Проект разработан в рамках учебного курса. По вопросам: [GitHub Katarsis435](https://github.com/Katarsis435/cryptosafe-manager/issues)
