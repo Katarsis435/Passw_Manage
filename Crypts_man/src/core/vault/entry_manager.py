@@ -5,11 +5,42 @@ import sqlite3
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import logging
-
 from Crypts_man.src.core.vault.encryption_service import EncryptionService
 from Crypts_man.src.core.events import events, EventType
 
 logger = logging.getLogger(__name__)
+
+
+def fuzzy_match(s1: str, s2: str, max_distance: int = 2) -> bool:
+    """Проверка на похожесть строк"""
+    if not s1 or not s2:
+        return False
+
+    s1 = s1.lower().strip()
+    s2 = s2.lower().strip()
+
+    # Точное совпадение
+    if s1 == s2:
+        return True
+
+    # Одна строка содержит другую
+    if s1 in s2 or s2 in s1:
+        return True
+
+    # Проверка по первым буквам и общей длине
+    if s1[0] != s2[0] and s2[0] not in s1[:2]:
+        return False
+
+    # Подсчёт совпадающих символов
+    matches = 0
+    for ch in s1:
+        if ch in s2:
+            matches += 1
+
+    # Если совпадает больше 70% символов - считаем похожим
+    similarity = matches / max(len(s1), len(s2))
+
+    return similarity >= 0.7
 
 
 class EntryManager:
@@ -72,6 +103,7 @@ class EntryManager:
             c.execute("CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_entries(category)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_vault_updated ON vault_entries(updated_at)")
 
+
     def create_entry(self, data: Dict[str, Any]) -> str:
         """
         Create new vault entry with encryption
@@ -122,6 +154,7 @@ class EntryManager:
         logger.info(f"Entry created: {entry_id}")
         return entry_id
 
+
     def get_entry(self, entry_id: str, include_deleted: bool = False) -> Optional[Dict[str, Any]]:
         """
         Retrieve and decrypt entry
@@ -159,6 +192,7 @@ class EntryManager:
         except Exception as e:
             logger.error(f"Failed to decrypt entry {entry_id}: {e}")
             return None
+
 
     def get_all_entries(self, limit: int = 1000, offset: int = 0,
                         search: str = None, category: str = None) -> List[Dict[str, Any]]:
@@ -232,21 +266,7 @@ class EntryManager:
                     table_entry['notes'] = '[Error]'
 
             entries.append(table_entry)
-
         return entries
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def update_entry(self, entry_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -468,6 +488,7 @@ class EntryManager:
 
         return entries
 
+
     def delete_entries_batch(self, entry_ids: List[str], soft_delete: bool = True) -> int:
         """Delete multiple entries in a transaction"""
         deleted = 0
@@ -476,67 +497,70 @@ class EntryManager:
                 deleted += 1
         return deleted
 
+
     def get_all_entries_metadata(self, limit: int = 1000, offset: int = 0,
                                  search: str = None, category: str = None) -> List[Dict[str, Any]]:
-        """Get entries WITHOUT decrypting password/notes (SEC-1 compliant)"""
-        query = """
-                SELECT id, title, username, url, category, tags, created_at, updated_at
-                FROM vault_entries
-                WHERE 1=1
-            """
-        params = []
+        """Get entries with fuzzy search"""
 
-        # FUZZY SEARCH - прощает опечатки
-        if search and search.strip():
-            search_term = search.strip()
+        # Без поиска - обычный SQL
+        if not search or not search.strip():
+            query = """
+                    SELECT id, title, username, url, category, tags, created_at, updated_at
+                    FROM vault_entries
+                    WHERE 1=1
+                """
+            params = []
+            if category:
+                query += " AND category = ?"
+                params.append(category)
+            query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
 
-            # Для каждого слова в поиске
-            words = search_term.split()
+            with self.db.cursor() as c:
+                c.execute(query, params)
+                rows = c.fetchall()
 
-            for word in words:
-                # Создаем варианты с возможными опечатками
-                patterns = []
+            return [{
+                'id': str(row[0]), 'title': row[1] or '', 'username': row[2] or '',
+                'url': row[3] or '', 'category': row[4] or '', 'tags': row[5] or '',
+                'created_at': row[6], 'updated_at': row[7]
+            } for row in rows]
 
-                # Оригинал
-                patterns.append(f"%{word}%")
-
-                # Если слово длинное - пробуем без последней буквы
-                if len(word) > 3:
-                  patterns.append(f"%{word[:-1]}%")
-
-                # Если слово длинное - пробуем с удвоенной первой буквой (опечатка)
-                if len(word) > 2:
-                  patterns.append(f"%{word[0]}{word}%")
-
-                # Добавляем условия для каждого паттерна
-                sub_conditions = []
-                for pattern in patterns:
-                    sub_conditions.append("(title LIKE ? OR username LIKE ? OR url LIKE ? OR tags LIKE ?)")
-                    params.extend([pattern, pattern, pattern, pattern])
-
-                query += " AND (" + " OR ".join(sub_conditions[:2]) + ")"  # Берем первые 2 паттерна для скорости
-
-        if category:
-            query += " AND category = ?"
-            params.append(category)
-
-        query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
+        # С поиском - достаём все и фильтруем в Python
         with self.db.cursor() as c:
-            c.execute(query, params)
+            c.execute("""
+                    SELECT id, title, username, url, category, tags, created_at, updated_at
+                    FROM vault_entries
+                    ORDER BY updated_at DESC
+                """)
             rows = c.fetchall()
 
-        entries = []
+        search_term = search.strip()
+        results = []
+
         for row in rows:
-            entries.append({
-                'id': str(row[0]),
-                'title': row[1],
-                'username': row[2] if row[2] else '',
-                'url': row[3] if row[3] else '',
-                'category': row[4] if row[4] else '',
-                'tags': row[5] if row[5] else '',
-                'created_at': row[6],
-                'updated_at': row[7]
-            })
-        return entries
+            title = row[1] or ''
+            username = row[2] or ''
+            url = row[3] or ''
+            category_val = row[4] or ''
+            tags_val = row[5] or ''
+
+            # Проверяем совпадение с поиском
+            if (fuzzy_match(search_term, title) or
+                fuzzy_match(search_term, username) or
+                fuzzy_match(search_term, url) or
+                fuzzy_match(search_term, category_val) or
+                fuzzy_match(search_term, tags_val)):
+                results.append({
+                    'id': str(row[0]),
+                    'title': title,
+                    'username': username,
+                    'url': url,
+                    'category': category_val,
+                    'tags': tags_val,
+                    'created_at': row[6],
+                    'updated_at': row[7]
+                })
+
+        # Применяем limit и offset
+        return results[offset:offset + limit]

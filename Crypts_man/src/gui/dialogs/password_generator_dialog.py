@@ -197,7 +197,15 @@ class PasswordGeneratorDialog:
 
     def _use_password(self):
         """Use generated password"""
-        self.result = self.password_var.get()
-        if self.callback and not self.result.startswith("Error"):
-            self.callback(self.result)
+        password = self.password_var.get()
+        if password and not password.startswith("Error"):
+            # Копируем в буфер обмена
+            self.parent.clipboard_clear()
+            self.parent.clipboard_append(password)
+            # Показываем уведомление
+            if hasattr(self.parent, 'status_label'):
+                self.parent.status_label.config(text="Password copied to clipboard")
+            self.result = password
+            if self.callback:
+                self.callback(password)
         self.dialog.destroy()

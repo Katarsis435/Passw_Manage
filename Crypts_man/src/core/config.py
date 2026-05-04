@@ -12,12 +12,14 @@ class Config:
         "database_path": str(Path.home() / ".cryptosafe" / "vault.db"),
         "encryption_enabled": True,
         "clipboard_timeout": 30,
+        "clipboard_security_level": "standard",  #SPR4
+        "accelerate_on_detection": True,        #SPR4
+        "suspicious_threshold": 5,             #SPR4
         "auto_lock_minutes": 5,
         "theme": "default",
         "language": "en",
-        # Argon2 parameters
         "argon2_time": 3,
-        "argon2_memory": 65536,  # 64 MiB
+        "argon2_memory": 65536,
         "argon2_parallelism": 4,
         "pbkdf2_iterations": 100000
     }

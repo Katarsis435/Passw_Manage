@@ -17,3 +17,10 @@ pytest>=9.0.0
 
 # Database (sqlite3 is included with Python)
 # No additional database dependencies needed
+
+# Sprint 4 - Clipboard dependencies
+pyperclip>=1.8.2
+# Windows-specific
+pywin32>=306; sys_platform == 'win32'
+# macOS-specific
+pyobjc>=9.0; sys_platform == 'darwin'

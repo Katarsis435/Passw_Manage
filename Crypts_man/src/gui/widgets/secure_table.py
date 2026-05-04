@@ -169,17 +169,66 @@ class SecureTable(ttk.Frame):
         self._delete_entry()
 
     def _copy_username(self):
-        """Copy username to clipboard"""
-        selected = self.get_selected_rows()
-        if selected and selected[0].get('username'):
-            self.parent.clipboard_clear()
-            self.parent.clipboard_append(selected[0]['username'])
+        """Copy username to clipboard (Sprint 4 integration)"""
+        print("=== _copy_username called ===")
+        selected = self.get_selected_row()
+        print(f"Selected: {selected}")
+
+        if not selected:
+            return
+
+        entry_id = selected.get('id')
+        print(f"Entry ID: {entry_id}")
+
+        # Get full decrypted entry from manager
+        if hasattr(self.parent, 'entry_manager') and self.parent.entry_manager:
+            entry = self.parent.entry_manager.get_entry(str(entry_id))
+            print(f"Entry found: {entry is not None}")
+            if entry and entry.get('username'):
+                username = entry.get('username')
+                print(f"Username length: {len(username)}")
+                if hasattr(self.parent, 'copy_to_clipboard'):
+                    self.parent.copy_to_clipboard(
+                        username,
+                        data_type="username",
+                        entry_id=str(entry_id)
+                    )
+                else:
+                    self.parent.clipboard_clear()
+                    self.parent.clipboard_append(username)
+            else:
+                print("No username in entry")
+        else:
+            print("No entry_manager")
 
     def _copy_password(self):
-        """Copy password to clipboard (will be implemented in Sprint 4)"""
-        # Placeholder for Sprint 4 clipboard integration
-        if hasattr(self.parent, 'copy_password_callback'):
-            self.parent.copy_password_callback()
+        """Copy password to clipboard"""
+        print("=== 1. _copy_password called ===")
+        selected = self.get_selected_row()
+        print(f"=== 2. Selected: {selected}")
+
+        if not selected:
+            print("=== 3. No selection")
+            return
+
+        entry_id = selected.get('id')
+        print(f"=== 4. Entry ID: {entry_id}")
+
+        if hasattr(self.parent, 'entry_manager') and self.parent.entry_manager:
+            print("=== 5. Getting entry...")
+            entry = self.parent.entry_manager.get_entry(str(entry_id))
+            print(f"=== 6. Entry found: {entry is not None}")
+            if entry and entry.get('password'):
+                print(f"=== 7. Password length: {len(entry['password'])}")
+                if hasattr(self.parent, 'copy_to_clipboard'):
+                    print("=== 8. Calling copy_to_clipboard")
+                    self.parent.copy_to_clipboard(
+                        entry['password'],
+                        data_type="password",
+                        entry_id=str(entry_id)
+                    )
+                else:
+                    print("=== 8. No copy_to_clipboard method")
 
     def _edit_entry(self):
         """Edit entry (trigger from context menu)"""
@@ -188,8 +237,14 @@ class SecureTable(ttk.Frame):
 
     def _delete_entry(self):
         """Delete entry (trigger from context menu)"""
-        if hasattr(self.parent, 'delete_entry_callback'):
-            self.parent.delete_entry_callback()
+
+        selected = self.get_selected_row()
+
+
+        if selected and hasattr(self.parent, 'delete_entry_by_id'):
+            self.parent.delete_entry_by_id(selected.get('id'))
+        else:
+            print(f"has delete_entry_by_id: {hasattr(self.parent, 'delete_entry_by_id')}")
 
     def set_data(self, data, show_passwords=False):
         """Populate table with data"""
@@ -254,8 +309,7 @@ class SecureTable(ttk.Frame):
             for i, col_id in enumerate(self.column_order):
                 if i < len(values):
                     row[col_id] = values[i]
-            # Also store the actual item ID
-            row['_id'] = item
+            row['id'] = item  #добавить ID
             selected.append(row)
         return selected
 
