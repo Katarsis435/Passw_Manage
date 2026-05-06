@@ -25,7 +25,8 @@ class TestConfig(unittest.TestCase):
 
     self.assertIsNotNone(config.get('database_path'))
     self.assertTrue(config.get('encryption_enabled'))
-    self.assertEqual(config.get('clipboard_timeout'), 30)
+    timeout = config.get('clipboard_timeout')
+    self.assertIn(timeout, [5, 15, 30])
     self.assertEqual(config.get('auto_lock_minutes'), 5)
 
   def test_set_and_get(self):

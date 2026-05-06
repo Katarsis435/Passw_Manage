@@ -11,17 +11,45 @@ from Crypts_man.src.core.clipboard.clipboard_monitor import ClipboardMonitor
 from Crypts_man.src.core.clipboard.secure_memory import SecureMemory
 from Crypts_man.src.core.events import events, EventType
 
+
 class SecureClipboardItem:
-    """Secure clipboard item with memory protection"""
+    """Secure clipboard item with memory protection - OBFUSCATED"""
 
     def __init__(self, data: str, data_type: str, source_entry_id: Optional[str],
                  copied_at: datetime, timeout: int, mask: bytes):
-        self.data = data
+        # Store obfuscated data, not plaintext!
+        self._mask = mask
+        self._obfuscated_data = self._obfuscate(data)
         self.data_type = data_type
         self.source_entry_id = source_entry_id
         self.copied_at = copied_at
         self.timeout = timeout
-        self.mask = mask
+
+    def _obfuscate(self, data: str) -> bytes:
+        """XOR obfuscation of data"""
+        data_bytes = data.encode('utf-8')
+        result = bytearray()
+        for i, b in enumerate(data_bytes):
+            result.append(b ^ self._mask[i % len(self._mask)])
+        return bytes(result)
+
+    def _deobfuscate(self) -> str:
+        """Get original data"""
+        data_bytes = bytearray()
+        for i, b in enumerate(self._obfuscated_data):
+            data_bytes.append(b ^ self._mask[i % len(self._mask)])
+        return data_bytes.decode('utf-8')
+
+    @property
+    def data(self) -> str:
+        """Get decrypted data (only when needed)"""
+        return self._deobfuscate()
+
+    def secure_wipe(self):
+        """Securely wipe memory"""
+        if self._obfuscated_data:
+            self._obfuscated_data = b'\x00' * len(self._obfuscated_data)
+        self._mask = b'\x00' * len(self._mask)
 
 
 class ClipboardService:
@@ -72,18 +100,26 @@ class ClipboardService:
             # Clear any existing content first
             self._clear_clipboard(notify=False)
 
-            # Copy to system clipboard
+            # CRITICAL: Create mask BEFORE copying
+            mask = secrets.token_bytes(32)
+            obfuscated_for_memory = self._obfuscate_data(data, mask)
+
+            # Copy to system clipboard - plaintext goes to Windows
+            # NOTE: System clipboard is inherently insecure
             print(f"Platform copy: {self.platform.copy_to_clipboard(data)}")
 
-            # Create secure item record
+            # Store ONLY obfuscated data in memory, NOT plaintext
             self.current_item = SecureClipboardItem(
-                data=data,
+                data="",  # Don't store plaintext
                 data_type=data_type,
                 source_entry_id=source_entry_id,
                 copied_at=datetime.now(),
                 timeout=self.timeout,
-                mask=secrets.token_bytes(32)
+                mask=mask
             )
+            # Manually set obfuscated data
+            self.current_item._obfuscated_data = obfuscated_for_memory
+
             print(f"Item created, timeout={self.timeout}s")
 
             # Start auto-clear timer
@@ -98,6 +134,19 @@ class ClipboardService:
             })
 
             return True
+
+    def _obfuscate_data(self, data: str, mask: bytes) -> bytes:
+        """XOR obfuscation of data"""
+        data_bytes = data.encode('utf-8')
+        result = bytearray()
+        for i, b in enumerate(data_bytes):
+            result.append(b ^ mask[i % len(mask)])
+        return bytes(result)
+
+
+
+
+
 
     def _start_timer(self):
         """Start auto-clear timer"""

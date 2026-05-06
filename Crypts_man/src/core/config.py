@@ -11,7 +11,7 @@ class Config:
     DEFAULT_CONFIG = {
         "database_path": str(Path.home() / ".cryptosafe" / "vault.db"),
         "encryption_enabled": True,
-        "clipboard_timeout": 30,
+        "clipboard_timeout": 15,
         "clipboard_security_level": "standard",  #SPR4
         "accelerate_on_detection": True,        #SPR4
         "suspicious_threshold": 5,             #SPR4
