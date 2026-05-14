@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# python -m unittest discover -s Crypts_man/tests -v
+# Crypts_man/main.py
+# !/usr/bin/env python3
 """CryptoSafe Manager - Main Entry Point"""
 
 import sys
@@ -14,9 +14,13 @@ from Crypts_man.src.gui.main_window import MainWindow
 
 def main():
     try:
-        print("Starting CryptoSafe Manager...")
+        print("Starting CryptoSafe Manager (Sprint 5 - Audit Logging)...")
         config = Config()
         db = Database(config.database_path)
+
+        # Migrate database for audit tables if needed
+        # (Database class already creates tables on init)
+
         app = MainWindow(config, db)
         app.run()
     except Exception as e:

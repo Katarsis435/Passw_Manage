@@ -24,3 +24,6 @@ pyperclip>=1.8.2
 pywin32>=306; sys_platform == 'win32'
 # macOS-specific
 pyobjc>=9.0; sys_platform == 'darwin'
+
+
+reportlab>=4.0.0

@@ -81,9 +81,11 @@ class ClipboardSettingsDialog:
 
     self.show_notify_var = tk.BooleanVar(value=self.config.get('clipboard_notifications', True))
     ttk.Checkbutton(
-      notif_frame, text="Show notifications when clipboard is copied/cleared",
+      notif_frame,
+      text="Show notifications when clipboard is copied/cleared",
       variable=self.show_notify_var
     ).pack(anchor=tk.W)
+
 
     # Buttons
     button_frame = ttk.Frame(main_frame)

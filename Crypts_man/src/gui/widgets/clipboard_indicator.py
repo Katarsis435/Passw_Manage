@@ -1,3 +1,6 @@
+
+# src/gui/widgets/clipboard_indicator.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 """Clipboard status indicator widget"""
 
 import tkinter as tk
@@ -20,7 +23,7 @@ class ClipboardIndicator(ttk.Frame):
     self.icon_label = ttk.Label(self, text="📋", font=('Arial', 10))
     self.icon_label.pack(side=tk.LEFT)
 
-    self.status_label = ttk.Label(self, text="", font=('Arial', 9))
+    self.status_label = ttk.Label(self, text="empty", font=('Arial', 9), foreground="gray")
     self.status_label.pack(side=tk.LEFT, padx=5)
 
     self.clear_btn = ttk.Button(
@@ -43,6 +46,8 @@ class ClipboardIndicator(ttk.Frame):
   def _update_status_loop(self):
     """Update status every 0.5 seconds"""
     self.update_status()
+
+    # Continue updates if clipboard is active
     if self.clipboard and self.clipboard.current_item:
       self._update_job = self.after(500, self._update_status_loop)
     else:
@@ -58,14 +63,20 @@ class ClipboardIndicator(ttk.Frame):
 
     status = self.clipboard.get_status()
 
-    if status.get('active'):
+    if status.get('active') and not status.get('blocked'):
       remaining = status.get('remaining_seconds', 0)
       data_type = status.get('data_type', 'data')
 
       if remaining > 0:
+        # Format remaining time
+        if remaining > 60:
+          text=f"{data_type} • {time_str}"
+        else:
+          time_str = f"{remaining:.0f}s"
+
         self.status_label.config(
-          text=f"{data_type} • {remaining:.0f}s",
-          foreground="orange"
+          text=f"{data_type} • {time_str}",
+          foreground="#ff8800" if remaining < 10 else "#44cc44"
         )
         self.icon_label.config(text="📋⏱")
         self.clear_btn.config(state=tk.NORMAL)
@@ -74,13 +85,9 @@ class ClipboardIndicator(ttk.Frame):
     elif status.get('blocked'):
       self.status_label.config(text="🚫 blocked", foreground="red")
       self.icon_label.config(text="🚫")
+      self.clear_btn.config(state=tk.DISABLED)
     else:
       self._set_inactive()
-
-    if self.clipboard and self.clipboard.current_item:
-      if self._update_job:
-        self.after_cancel(self._update_job)
-      self._update_job = self.after(500, self._update_status_loop)
 
   def _set_inactive(self):
     """Set indicator to inactive state"""
@@ -88,12 +95,8 @@ class ClipboardIndicator(ttk.Frame):
     self.icon_label.config(text="📋")
     self.clear_btn.config(state=tk.DISABLED)
 
-    if self._update_job:
-      self.after_cancel(self._update_job)
-      self._update_job = None
-
   def _on_clear_click(self):
     """Handle clear button click"""
     if self.clipboard:
-      self.clipboard.clear(force=True, reason="manual")
-      self.update_status()
+      if self.clipboard.clear(force=True, reason="manual"):
+        self.update_status()

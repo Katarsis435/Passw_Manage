@@ -118,54 +118,75 @@ class AuditLogger:
     def _create_tables(self):
         """Create audit log tables with proper schema"""
         with self.db.cursor() as c:
-            # Main audit log table
-            c.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    sequence_number INTEGER PRIMARY KEY AUTOINCREMENT,
-                    previous_hash TEXT NOT NULL,
-                    entry_data BLOB NOT NULL,
-                    entry_hash TEXT NOT NULL,
-                    signature TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    event_type TEXT,
-                    severity TEXT,
-                    user_id TEXT,
-                    source TEXT,
-                    entry_id TEXT
-                )
-            """)
+            # Check if old audit_log table exists
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")
+            table_exists = c.fetchone()
+
+            if table_exists:
+                # Check if table has the new structure (sequence_number column)
+                c.execute("PRAGMA table_info(audit_log)")
+                columns = [row[1] for row in c.fetchall()]
+
+                # If old table structure (missing sequence_number), drop and recreate
+                if 'sequence_number' not in columns:
+                    print("⚠ Old audit_log structure detected, recreating table...")
+                    # Backup old data if needed (optional)
+                    c.execute("DROP TABLE IF EXISTS audit_log")
+                    c.execute("DROP TABLE IF EXISTS audit_keys")
+                    c.execute("DROP TABLE IF EXISTS audit_integrity_checks")
+                    table_exists = False
+
+            if not table_exists:
+                # Create fresh table with correct schema
+                c.execute("""
+                          CREATE TABLE audit_log (
+                              sequence_number INTEGER PRIMARY KEY AUTOINCREMENT,
+                              previous_hash TEXT NOT NULL,
+                              entry_data BLOB NOT NULL,
+                              entry_hash TEXT NOT NULL,
+                              signature TEXT NOT NULL,
+                              timestamp TEXT NOT NULL,
+                              event_type TEXT,
+                              severity TEXT,
+                              user_id TEXT,
+                              source TEXT,
+                              entry_id TEXT
+                          )
+                      """)
+                print("✓ Created audit_log table with correct schema")
+
+                # Create indexes
+                c.execute("CREATE INDEX idx_audit_timestamp ON audit_log(timestamp)")
+                c.execute("CREATE INDEX idx_audit_event_type ON audit_log(event_type)")
+                c.execute("CREATE INDEX idx_audit_sequence ON audit_log(sequence_number)")
+                c.execute("CREATE INDEX idx_audit_user ON audit_log(user_id)")
+                c.execute("CREATE INDEX idx_audit_entry ON audit_log(entry_id)")
 
             # Public key storage
             c.execute("""
-                CREATE TABLE IF NOT EXISTS audit_keys (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    public_key TEXT NOT NULL,
-                    key_algorithm TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_active BOOLEAN DEFAULT 1
-                )
-            """)
+                    CREATE TABLE IF NOT EXISTS audit_keys (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        public_key TEXT NOT NULL,
+                        key_algorithm TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        is_active BOOLEAN DEFAULT 1
+                    )
+                """)
 
             # Integrity check results
             c.execute("""
-                CREATE TABLE IF NOT EXISTS audit_integrity_checks (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    total_entries INTEGER,
-                    valid_entries INTEGER,
-                    tampered_entries INTEGER,
-                    hash_chain_breaks INTEGER,
-                    check_result TEXT,
-                    details TEXT
-                )
-            """)
+                    CREATE TABLE IF NOT EXISTS audit_integrity_checks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        check_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        total_entries INTEGER,
+                        valid_entries INTEGER,
+                        tampered_entries INTEGER,
+                        hash_chain_breaks INTEGER,
+                        check_result TEXT,
+                        details TEXT
+                    )
+                """)
 
-            # Create indexes
-            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log(event_type)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_sequence ON audit_log(sequence_number)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_entry ON audit_log(entry_id)")
 
     def _create_genesis_entry(self):
         """Create first log entry to start hash chain"""

@@ -12,15 +12,6 @@ from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
 from Crypts_man.src.gui.widgets.clipboard_indicator import ClipboardIndicator
 from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettingsDialog
 
-from Crypts_man.src.core.audit.audit_logger import AuditLogger, AuditEventType, AuditSeverity
-from Crypts_man.src.core.audit.log_signer import AuditLogSigner
-from Crypts_man.src.core.audit.log_verifier import LogVerifier
-from Crypts_man.src.gui.widgets.audit_log_viewer import AuditLogViewer
-
-
-
-
-
 
 class MainWindow:
     """Main application window with vault management"""
@@ -46,7 +37,7 @@ class MainWindow:
         self._vault_ready = False
         self.clipboard = None
 
-        #5
+        # Audit components (Sprint 5)
         self.audit_logger = None
         self.audit_signer = None
         self.audit_verifier = None
@@ -85,8 +76,8 @@ class MainWindow:
         vault_menu.add_command(label="Edit Entry", command=self._edit_entry, accelerator="Ctrl+E")
         vault_menu.add_command(label="Delete Entry", command=self._delete_entry, accelerator="Del")
         vault_menu.add_separator()
-
         vault_menu.add_command(label="Generate Password", command=self._show_password_generator, accelerator="Ctrl+G")
+
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
         view_menu.add_command(label="Toggle Password Visibility", command=self._toggle_password_visibility,
@@ -96,6 +87,15 @@ class MainWindow:
         view_menu.add_command(label="Clear Clipboard Now", command=self._clear_clipboard_manually,
                               accelerator="Ctrl+Shift+C")
         view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
+
+        # Security menu (Sprint 5)
+        security_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Security", menu=security_menu)
+        security_menu.add_command(label="View Audit Log", command=self._show_audit_viewer, accelerator="Ctrl+Shift+A")
+        security_menu.add_command(label="Verify Audit Integrity", command=self._verify_audit_logs)
+        security_menu.add_separator()
+        security_menu.add_command(label="Export Audit Logs", command=self._export_audit_logs)
+
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
@@ -151,7 +151,6 @@ class MainWindow:
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Clipboard indicator (Sprint 4)
-        from Crypts_man.src.gui.widgets.clipboard_indicator import ClipboardIndicator
         self.clipboard_indicator = ClipboardIndicator(self.status_frame, self)
         self.clipboard_indicator.pack(side=tk.RIGHT, padx=5)
         self.lock_status = ttk.Label(self.status_frame, text="🔒 Locked", foreground="red")
@@ -168,6 +167,7 @@ class MainWindow:
         self.root.bind('<Control-g>', lambda e: self._show_password_generator())
         self.root.bind('<Control-f>', lambda e: self.search_entry.focus_set())
         self.root.bind('<Control-Shift-C>', lambda e: self._clear_clipboard_manually())
+        self.root.bind('<Control-Shift-A>', lambda e: self._show_audit_viewer())  # Sprint 5
 
     def _bind_events(self):
         """Bind event system callbacks"""
@@ -180,62 +180,256 @@ class MainWindow:
     def _on_entry_changed(self, data):
         """Handle entry changes"""
         self._load_vault_data()
-
+        # Log to audit
+        if self.audit_logger:
+            event_type = data.get('action', 'modified')
+            self.audit_logger.log_event(
+                event_type=f"vault.entry.{event_type}",
+                severity="INFO",
+                source="vault",
+                details={'entry_id': data.get('id'), 'title': data.get('title')},
+                user_id='user',
+                entry_id=data.get('id')
+            )
 
     def _on_user_logged_in(self, data):
-        """Handle user login event - FIXED & STREAMLINED"""
+        """Handle user login event"""
         print("🔓 USER LOGGED IN EVENT")
         self.lock_status.config(text="🔓 Unlocked", foreground="green")
 
-        # Безопасная инициализация (защита от двойного вызова)
         if not self._vault_ready:
             self._init_vault_components()
+            # Убедимся что ключ загружен
+            if self.key_manager and self.key_manager.get_cached_encryption_key():
+                print("✓ Encryption key is available, initializing audit...")
+                self._init_audit_system()
+            else:
+                print("⚠ Waiting for encryption key...")
+                # Попробуем еще раз через 500ms
+                self.root.after(500, lambda: self._retry_audit_init())
             self._load_vault_data()
-            # Initialize clipboard service (Sprint 4)
             self._init_clipboard_service()
-            #  НОВОЕ: Initialize audit system (Sprint 5)
-            self._init_audit_system()
 
-        # Надёжное включение кнопок через after()
+    def _retry_audit_init(self):
+        """Retry audit initialization after key is available"""
+        if self.key_manager and self.key_manager.get_cached_encryption_key():
+            print("✓ Retry: encryption key available, initializing audit...")
+            self._init_audit_system()
+        else:
+            print("⚠ Still waiting for encryption key...")
+            self.root.after(1000, self._retry_audit_init)
+
+
+
         def enable_buttons_safe():
             try:
                 btns = [self.add_button, self.edit_button, self.delete_button, self.gen_button]
                 for btn in btns:
                     if btn and btn.winfo_exists():
                         btn.config(state=tk.NORMAL)
-                print("✅ Vault buttons enabled")
+                print("✓ Vault buttons enabled")
             except tk.TclError:
                 pass
 
         self.root.after(50, enable_buttons_safe)
 
+    def _init_audit_system(self):
+        """Initialize audit logging system after authentication"""
+        try:
+            from Crypts_man.src.core.audit.audit_logger import AuditLogger, AuditEventType, AuditSeverity
+            from Crypts_man.src.core.audit.log_signer import AuditLogSigner
+            from Crypts_man.src.core.audit.log_verifier import LogVerifier
+
+            # Create signer
+            self.audit_signer = AuditLogSigner(self.key_manager, self.config)
+
+            # Create logger
+            self.audit_logger = AuditLogger(self.db, self.audit_signer, self.config)
+
+            # Create verifier
+            self.audit_verifier = LogVerifier(self.db, self.audit_signer)
+
+            # Store public key
+            self.audit_signer.store_public_key(self.db)
+
+            # Subscribe to events for automatic logging
+            self._subscribe_audit_events()
+
+            # Start periodic verification
+            self._start_periodic_verification()
+
+            # Log successful initialization
+            self.audit_logger.log_event(
+              event_type=AuditEventType.SYSTEM_UNLOCK.value,
+              severity=AuditSeverity.INFO.value,
+              source="main_window",
+              details={'message': 'Audit system initialized'},
+              user_id='user'
+            )
+
+            print("✓ Audit system initialized")
+        except Exception as e:
+            print(f"⚠ Audit system initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _subscribe_audit_events(self):
+        """Subscribe to system events for automatic audit logging"""
+        if not self.audit_logger:
+            return
+
+        def log_entry_added(data):
+            self.audit_logger.log_event(
+                event_type="vault.entry.create",
+                severity="INFO",
+                source="vault",
+                details={'entry_id': data.get('id'), 'title': data.get('title')},
+                user_id='user',
+                entry_id=data.get('id')
+            )
+
+        def log_entry_updated(data):
+            self.audit_logger.log_event(
+                event_type="vault.entry.update",
+                severity="INFO",
+                source="vault",
+                details={'entry_id': data.get('id'), 'title': data.get('title')},
+                user_id='user',
+                entry_id=data.get('id')
+            )
+
+        def log_entry_deleted(data):
+            self.audit_logger.log_event(
+                event_type="vault.entry.delete",
+                severity="WARN",
+                source="vault",
+                details={'entry_id': data.get('id'), 'soft': data.get('soft', True)},
+                user_id='user',
+                entry_id=data.get('id')
+            )
+
+        events.subscribe(EventType.ENTRY_ADDED, log_entry_added)
+        events.subscribe(EventType.ENTRY_UPDATED, log_entry_updated)
+        events.subscribe(EventType.ENTRY_DELETED, log_entry_deleted)
+
+    def _start_periodic_verification(self):
+        """Start periodic log verification"""
+
+        def verify_periodically():
+            if self.audit_verifier and self._vault_ready:
+                try:
+                    result = self.audit_verifier.verify_recent(count=100)
+                    if not result.verified:
+                        self._handle_audit_tampering(result)
+                except Exception as e:
+                    print(f"Periodic verification failed: {e}")
+
+            if self.periodic_verification_job:
+                self.root.after_cancel(self.periodic_verification_job)
+            self.periodic_verification_job = self.root.after(86400000, verify_periodically)  # 24 hours
+
+        self.root.after(60000, verify_periodically)  # Start after 1 minute
+
+    def _handle_audit_tampering(self, result):
+        """Handle detected audit log tampering"""
+        messagebox.showwarning(
+            "Security Alert",
+            f"Audit log tampering detected!\n\n"
+            f"Tampered entries: {len(result.tampered_entries)}\n"
+            f"Chain breaks: {len(result.chain_breaks)}\n\n"
+            f"Please verify your database integrity."
+        )
+
+    def _show_audit_viewer(self):
+        """Show audit log viewer dialog"""
+        if not self.audit_logger:
+            messagebox.showwarning("Not Available", "Audit system not initialized")
+            return
+
+        from Crypts_man.src.gui.dialogs.audit_viewer_dialog import AuditViewerDialog
+        AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
+
+    def _verify_audit_logs(self):
+        """Manually verify audit logs"""
+        if not self.audit_verifier:
+            messagebox.showwarning("Not Available", "Audit system not initialized")
+            return
+
+        progress = tk.Toplevel(self.root)
+        progress.title("Verifying...")
+        progress.geometry("300x100")
+        progress.transient(self.root)
+
+        label = ttk.Label(progress, text="Verifying audit log integrity...")
+        label.pack(pady=20)
+
+        progress_bar = ttk.Progressbar(progress, mode='indeterminate')
+        progress_bar.pack(fill=tk.X, padx=20)
+        progress_bar.start()
+
+        def do_verify():
+            try:
+                result = self.audit_verifier.verify_full()
+                self.root.after(0, lambda: self._show_verification_result(result, progress))
+            except Exception as e:
+                self.root.after(0, lambda: self._show_verification_error(str(e), progress))
+
+        import threading
+        threading.Thread(target=do_verify, daemon=True).start()
+
+    def _show_verification_result(self, result, progress_dialog):
+        """Show verification result"""
+        progress_dialog.destroy()
+
+        if result.verified:
+            messagebox.showinfo(
+                "Verification Complete",
+                f"✓ Audit log integrity verified!\n\n"
+                f"Entries checked: {result.total_entries}\n"
+                f"Valid signatures: {result.valid_entries}\n"
+                f"Verification time: {result.verification_time:.2f}s"
+            )
+        else:
+            messagebox.showerror(
+                "Verification Failed",
+                f"✗ Audit log tampering detected!\n\n"
+                f"Total entries: {result.total_entries}\n"
+                f"Valid entries: {result.valid_entries}\n"
+                f"Invalid signatures: {len(result.invalid_signatures)}\n"
+                f"Chain breaks: {len(result.chain_breaks)}\n\n"
+                f"Please check security logs for details."
+            )
+
+    def _show_verification_error(self, error, progress_dialog):
+        """Show verification error"""
+        progress_dialog.destroy()
+        messagebox.showerror("Verification Error", f"Failed to verify logs: {error}")
+
+    def _export_audit_logs(self):
+        """Export audit logs"""
+        if not self.audit_logger:
+            messagebox.showwarning("Not Available", "Audit system not initialized")
+            return
+
+        from Crypts_man.src.gui.dialogs.audit_export_dialog import AuditExportDialog
+        AuditExportDialog(self.root, self.audit_logger, self.audit_signer)
+
     def _init_clipboard_service(self):
-        """Initialize clipboard service after login (Sprint 4)"""
-        from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
-        from Crypts_man.src.core.events import events
-
-        if not hasattr(self, 'clipboard') or self.clipboard is None:
-            print("=== Initializing Clipboard Service ===")
+        """Initialize clipboard service after login"""
+        if not self.clipboard:
             self.clipboard = ClipboardService(self.config, events, self.root)
-
             if self.clipboard_indicator:
                 self.clipboard_indicator.set_clipboard_service(self.clipboard)
                 self.clipboard_indicator.start_updates()
-            print("=== Clipboard Service initialized ===")
-
-
-
 
     def _on_user_logged_out(self, data):
         """Handle user logout event"""
         self.lock_status.config(text="🔒 Locked", foreground="red")
         self.table.set_data([])
-        # Clear clipboard on lock (Sprint 4)
         if self.clipboard:
             self.clipboard.clear(force=True, reason="vault_locked")
         self.entry_manager = None
         self._vault_ready = False
-        # Отключаем кнопки
         btns = [self.add_button, self.edit_button, self.delete_button, self.gen_button]
         for btn in btns:
             if btn and btn.winfo_exists():
@@ -247,7 +441,6 @@ class MainWindow:
 
         print("=== _init_vault_components called ===")
 
-        # НЕ пересоздаём менеджеры! Используем уже аутентифицированные
         if not hasattr(self, 'key_manager') or self.key_manager is None:
             print("⚠ KeyManager missing, creating fallback")
             from Crypts_man.src.core.key_manager import KeyManager
@@ -258,7 +451,6 @@ class MainWindow:
             from Crypts_man.src.core.authentication import AuthenticationManager
             self.auth_manager = AuthenticationManager(self.key_manager)
 
-        # Берём ключ, который уже закеширован в do_login()
         encryption_key = self.key_manager.get_cached_encryption_key()
         if not encryption_key:
             encryption_key = self.auth_manager.get_encryption_key()
@@ -272,14 +464,13 @@ class MainWindow:
                 print("✓ EntryManager initialized successfully")
             except Exception as e:
                 print(f"✗ EntryManager failed: {e}")
-                import traceback;
+                import traceback
                 traceback.print_exc()
                 self._vault_ready = False
                 messagebox.showerror("Vault Error", f"Failed to init vault: {e}")
         else:
             print("✗ No valid encryption key")
             self._vault_ready = False
-
 
     def _show_login(self):
         """Show login dialog"""
@@ -289,7 +480,6 @@ class MainWindow:
         dialog.transient(self.root)
         dialog.grab_set()
 
-        # Center dialog
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
         y = (dialog.winfo_screenheight() // 2) - (300 // 2)
@@ -298,7 +488,6 @@ class MainWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(main_frame, text="CryptoSafe Manager", font=('Arial', 16, 'bold')).pack(pady=10)
 
-        # Check if first run
         auth_hash = self.db.get_auth_hash()
         if not auth_hash:
             self._show_first_run_setup(dialog)
@@ -314,93 +503,21 @@ class MainWindow:
 
         def toggle_password():
             show_pwd.set(not show_pwd.get())
-            if show_pwd.get():
-                password_entry.config(show="")
-            else:
-                password_entry.config(show="*")
+            password_entry.config(show="" if show_pwd.get() else "*")
 
         ttk.Button(pwd_frame, text="👁", width=3, command=toggle_password).pack(side=tk.LEFT, padx=(5, 0))
         error_label = ttk.Label(main_frame, text="", foreground="red")
         error_label.pack()
 
-        # ПРОВЕРКА - существует ли метод _do_login_action?
-        print(f"DEBUG: Has _do_login_action = {hasattr(self, '_do_login_action')}")
-
-        # Простая обертка вместо lambda
         def login_wrapper():
-            print("=== login_wrapper CALLED ===")
             self._do_login_action(password_entry, error_label, dialog)
 
-        # ЗАМЕНИТЬ существующую кнопку Login на эту:
         login_btn = ttk.Button(main_frame, text="Login", command=login_wrapper)
         login_btn.pack(pady=10)
-
-        # Bind Enter key
         password_entry.bind('<Return>', lambda e: self._do_login_action(password_entry, error_label, dialog))
 
-
     def _do_login_action(self, password_entry, error_label, dialog):
-        """Handle login action - separate method"""
-        print("=== _do_login_action CALLED ===")
-        password = password_entry.get()
-        print(f"Password entered: {'*' * len(password)}")
-
-        if not password:
-            error_label.config(text="Please enter password")
-            return
-
-        auth_hash_data = self.db.get_auth_hash()
-        salt_data = self.db.get_encryption_salt()
-
-        if not auth_hash_data or not salt_data:
-            error_label.config(text="Authentication data not found")
-            return
-
-        from Crypts_man.src.core.key_manager import KeyManager
-        key_manager = KeyManager(self.config)
-
-        from Crypts_man.src.core.authentication import AuthenticationManager
-        auth_manager = AuthenticationManager(key_manager)
-
-        stored_hash = auth_hash_data['hash'].decode() if isinstance(auth_hash_data['hash'], bytes) else auth_hash_data[
-          'hash']
-        print(f"Authenticating...")
-
-        encryption_key = auth_manager.authenticate(
-            password,
-            stored_hash,
-            salt_data['salt']
-        )
-
-        if encryption_key:
-            print("SUCCESS!")
-            self.auth_manager = auth_manager
-            self.key_manager = key_manager
-            key_manager.cache_encryption_key(encryption_key)
-
-            cached = key_manager.get_cached_encryption_key()
-            print(f"Cached key length: {len(cached) if cached else 'None'}")
-
-
-
-            self._init_vault_components()
-            self._load_vault_data()
-
-            btns = [self.add_button, self.edit_button, self.delete_button, self.gen_button]
-            for btn in btns:
-                if btn and btn.winfo_exists():
-                    btn.config(state=tk.NORMAL)
-
-            self._init_clipboard_service()
-            dialog.destroy()
-        else:
-            print("FAILED!")
-            error_label.config(text="Invalid password")
-
-
-
-    def _do_login_action(self, password_entry, error_label, dialog):
-        """Separate method for login action"""
+        """Handle login action"""
         print("=== _do_login_action CALLED ===")
         password = password_entry.get()
         print(f"Password length: {len(password)}")
@@ -437,6 +554,7 @@ class MainWindow:
             key_manager.cache_encryption_key(encryption_key)
 
             self._init_vault_components()
+            self._init_audit_system()
             self._load_vault_data()
 
             if hasattr(self, 'add_button'):
@@ -453,10 +571,9 @@ class MainWindow:
         else:
             error_label.config(text="Invalid password")
 
-
     def _show_first_run_setup(self, parent):
         for widget in parent.winfo_children():
-            widget.destroy()
+          widget.destroy()
 
         main_frame = ttk.Frame(parent, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -491,27 +608,23 @@ class MainWindow:
             pwd = password_entry.get()
             conf = confirm_entry.get()
             if not pwd:
-                error_label.config(text="Please enter a password");
+                error_label.config(text="Please enter a password")
                 return
             if pwd != conf:
-                error_label.config(text="Passwords do not match");
+                error_label.config(text="Passwords do not match")
                 return
             if len(pwd) < 8:
-                error_label.config(text="Password must be at least 8 characters");
+                error_label.config(text="Password must be at least 8 characters")
                 return
 
-
-            # Check password strength
             from Crypts_man.src.core.vault.password_generator import PasswordGenerator
             pg = PasswordGenerator()
             strength = pg.estimate_strength(pwd)
-            if strength['score'] < 2:  # Weak or Very Weak
+            if strength['score'] < 2:
                 if not messagebox.askyesno("Weak Password",
-                                           f"Your password is {strength['rating']}.\n\n"
-                                           f"Suggestions:\n" + "\n".join(f"• {s}" for s in strength['feedback'][:3]) +
-                                           "\n\nContinue anyway?"):
-                                           return
-
+                                             f"Your password is {strength['rating']}.\n\n"
+                                             f"Continue anyway?"):
+                    return
 
             from Crypts_man.src.core.key_manager import KeyManager
             km = KeyManager(self.config)
@@ -525,12 +638,7 @@ class MainWindow:
             parent.destroy()
             self._show_login()
 
-
         ttk.Button(main_frame, text="Create Vault", command=do_setup).pack(pady=10)
-
-
-
-
 
     def _lock_vault(self):
         """Lock the vault"""
@@ -540,46 +648,40 @@ class MainWindow:
         self.root.after(100, self._show_login)
 
     def _load_vault_data(self):
-          """Load vault data using EntryManager"""
-          if not self._vault_ready or not self.entry_manager:
-              return
+        """Load vault data using EntryManager"""
+        if not self._vault_ready or not self.entry_manager:
+            return
 
-          try:
-              category = self.category_filter.get()
-              if category == "All":
-                  category = None
+        try:
+            category = self.category_filter.get()
+            if category == "All":
+                category = None
 
+            search = self.search_var.get().strip() or None
+            entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
 
-              search = self.search_var.get().strip() or None
-              print(f"🔍 SEARCH DEBUG: search='{search}', category='{category}'")
-              print(f"DEBUG: search='{search}', category='{category}'")  # <-- ДОБАВЬ ЭТО
-              entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
-              print(f"DEBUG: found {len(entries)} entries")  # <-- И ЭТО
-              print(f"🔍 SEARCH DEBUG: found {len(entries)} entries")
+            table_data = []
+            for entry in entries:
+                table_data.append({
+                    'id': str(entry.get('id', '')),
+                    'title': entry.get('title', ''),
+                    'username': entry.get('username', ''),
+                    'password_masked': '••••••••',
+                    'url': entry.get('url', ''),
+                    'updated_at': str(entry.get('updated_at', ''))[:10] if entry.get('updated_at') else '',
+                    'category': entry.get('category', '')
+                })
 
-
-              table_data = []
-              for entry in entries:
-                  table_data.append({
-                      'id': str(entry.get('id', '')),
-                      'title': entry.get('title', ''),
-                      'username': entry.get('username', ''),
-                      'password_masked': '••••••••',
-                      'url': entry.get('url', ''),
-                      'updated_at': str(entry.get('updated_at', ''))[:10] if entry.get('updated_at') else '',
-                      'category': entry.get('category', '')
-                  })
-
-              self.table.set_data(table_data, self.show_passwords)
-              self.status_label.config(text=f"Loaded {len(table_data)} entries")
-          except Exception as e:
-              print(f"Error loading entries: {e}")
-              import traceback
-              traceback.print_exc()
-              self.status_label.config(text="Error loading entries")
+            self.table.set_data(table_data, self.show_passwords)
+            self.status_label.config(text=f"Loaded {len(table_data)} entries")
+        except Exception as e:
+            print(f"Error loading entries: {e}")
+            import traceback
+            traceback.print_exc()
+            self.status_label.config(text="Error loading entries")
 
     def _add_entry(self):
-        """Add new vault entry with enhanced dialog"""
+        """Add new vault entry"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
@@ -602,77 +704,51 @@ class MainWindow:
         fields = {}
         row = 0
 
-        # Title
         ttk.Label(form_frame, text="Title*: ", foreground="black").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
         row += 1
 
-        # Username
         ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['username'] = username_entry
         row += 1
 
-        # Password
         ttk.Label(form_frame, text="Password*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
-
         password_entry = ttk.Entry(pwd_frame, show="*", width=25)
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Кнопка "глаз" для показа/скрытия пароля
         show_password_var = tk.BooleanVar(value=False)
 
         def toggle_password_visibility():
             if show_password_var.get():
                 password_entry.config(show="")
-                eye_btn.config(text="🙈")
             else:
                 password_entry.config(show="*")
-                eye_btn.config(text="👁")
 
         eye_btn = ttk.Button(pwd_frame, text="👁", width=3,
                              command=lambda: [show_password_var.set(not show_password_var.get()),
                                               toggle_password_visibility()])
         eye_btn.pack(side=tk.RIGHT, padx=(2, 0))
 
-        # Фрейм для силы пароля
         strength_frame = ttk.Frame(form_frame)
         strength_frame.grid(row=row + 1, column=1, sticky=tk.W, padx=5, pady=2)
-
         strength_label = ttk.Label(strength_frame, text="")
         strength_label.pack(side=tk.LEFT)
-
-        warning_label = ttk.Label(strength_frame, text="", foreground="orange")
-        warning_label.pack(side=tk.LEFT, padx=10)
 
         def update_strength(*args):
             pwd = password_entry.get()
             if not pwd:
                 strength_label.config(text="")
-                warning_label.config(text="")
                 return
             strength = self.password_generator.estimate_strength(pwd)
-
-            if strength['score'] == 0:
-                strength_label.config(text="Очень слабый", foreground="red")
-                warning_label.config(text="Используй 8+ символов, цифры, спецсимволы!")
-            elif strength['score'] == 1:
-                strength_label.config(text="Слабый", foreground="orange")
-                warning_label.config(text="Добавь цифры и спецсимволы")
-            elif strength['score'] == 2:
-                strength_label.config(text="Средний", foreground="gold")
-                warning_label.config(text="")
-            elif strength['score'] == 3:
-                strength_label.config(text="Сильный", foreground="lightgreen")
-                warning_label.config(text="")
-            else:
-                strength_label.config(text="Очень сильный", foreground="green")
-                warning_label.config(text="")
+            ratings = ["Очень слабый", "Слабый", "Средний", "Сильный", "Очень сильный"]
+            colors = ["red", "orange", "gold", "lightgreen", "green"]
+            strength_label.config(text=ratings[strength['score']], foreground=colors[strength['score']])
 
         password_entry.bind('<KeyRelease>', update_strength)
 
@@ -681,34 +757,32 @@ class MainWindow:
                 password_entry.delete(0, tk.END)
                 password_entry.insert(0, pwd)
                 update_strength()
+
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
 
         ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
         fields['password'] = password_entry
         row += 2
 
-        # URL
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         url_entry = ttk.Entry(form_frame, width=40)
         url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['url'] = url_entry
         row += 1
 
-        # Category
         ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-        category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"], width=37, state="readonly")
+        category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"], width=37,
+                                      state="readonly")
         category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['category'] = category_combo
         row += 1
 
-        # Tags
         ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['tags'] = tags_entry
         row += 1
 
-        # Notes
         ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
@@ -722,23 +796,6 @@ class MainWindow:
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
-            if not any(c.isalpha() for c in title):
-                messagebox.showerror("Error", "Title must contain at least one letter")
-                return
-
-            url = fields['url'].get().strip()
-            if url:
-                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
-                if not is_valid_url:
-                    messagebox.showerror("Error", f"'{url}' is not a valid URL!")
-                    return
-
-            tags = fields['tags'].get().strip()
-            if tags:
-                allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
-                if not all(c in allowed for c in tags):
-                    messagebox.showerror("Error", "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
-                    return
 
             password = fields['password'].get()
             if not password:
@@ -749,9 +806,9 @@ class MainWindow:
                 'title': title,
                 'username': fields['username'].get().strip(),
                 'password': password,
-                'url': url,
+                'url': fields['url'].get().strip(),
                 'category': fields['category'].get(),
-                'tags': tags,
+                'tags': fields['tags'].get().strip(),
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
 
@@ -771,17 +828,8 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-
-    def _update_password_strength(self, password, label):
-        """Update password strength display"""
-        if not password:
-            label.config(text="")
-            return
-        strength = self.password_generator.estimate_strength(password)
-        label.config(text=f"Strength: {strength['rating']}")
-
     def _edit_entry(self):
-        """Edit selected entry with full form"""
+        """Edit selected entry"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
@@ -792,7 +840,6 @@ class MainWindow:
             return
 
         entry_id = selected.get('id')
-        print(f"DEBUG EDIT: entry_id={entry_id}")
         try:
             entry = self.entry_manager.get_entry(entry_id)
         except Exception:
@@ -820,7 +867,6 @@ class MainWindow:
         fields = {}
         row = 0
 
-        # Title
         ttk.Label(form_frame, text="Title*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.insert(0, entry.get('title', ''))
@@ -828,7 +874,6 @@ class MainWindow:
         fields['title'] = title_entry
         row += 1
 
-        # Username
         ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.insert(0, entry.get('username', ''))
@@ -836,13 +881,21 @@ class MainWindow:
         fields['username'] = username_entry
         row += 1
 
-        # Password
         ttk.Label(form_frame, text="Password: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
         password_entry.insert(0, entry.get('password', ''))
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        show_password_var = tk.BooleanVar(value=False)
+
+        def toggle_password():
+          password_entry.config(show="" if show_password_var.get() else "*")
+
+        eye_btn = ttk.Button(pwd_frame, text="👁", width=3,
+                             command=lambda: [show_password_var.set(not show_password_var.get()), toggle_password()])
+        eye_btn.pack(side=tk.RIGHT, padx=(2, 0))
 
         strength_label = ttk.Label(form_frame, text="")
         strength_label.grid(row=row + 1, column=1, sticky=tk.W, padx=5, pady=2)
@@ -853,48 +906,24 @@ class MainWindow:
                 strength_label.config(text="")
                 return
             strength = self.password_generator.estimate_strength(pwd)
-            if strength['score'] == 0:
-                strength_label.config(text="Очень слабый", foreground="red")
-            elif strength['score'] == 1:
-                strength_label.config(text="Слабый", foreground="orange")
-            elif strength['score'] == 2:
-                strength_label.config(text="Средний", foreground="gold")
-            elif strength['score'] == 3:
-                strength_label.config(text="Сильный", foreground="lightgreen")
-            else:
-                strength_label.config(text="Очень сильный", foreground="green")
+            ratings = ["Очень слабый", "Слабый", "Средний", "Сильный", "Очень сильный"]
+            colors = ["red", "orange", "gold", "lightgreen", "green"]
+            strength_label.config(text=ratings[strength['score']], foreground=colors[strength['score']])
 
-            password_entry.bind('<KeyRelease>', update_strength)
-            update_strength()
+        password_entry.bind('<KeyRelease>', update_strength)
 
-            def generate_and_set():
-                def set_password(pwd):
-                    password_entry.delete(0, tk.END)
-                    password_entry.insert(0, pwd)
-                    update_strength()
+        def generate_and_set():
+            def set_password(pwd):
+                password_entry.delete(0, tk.END)
+                password_entry.insert(0, pwd)
+                update_strength()
 
-                PasswordGeneratorDialog(dialog, self.password_generator, set_password)
-
-            # Кнопка "глаз" для показа/скрытия пароля
-            show_password_var = tk.BooleanVar(value=False)
-
-            def toggle_password():
-                if show_password_var.get():
-                    password_entry.config(show="")
-                    eye_btn.config(text="🙈")
-                else:
-                    password_entry.config(show="*")
-                    eye_btn.config(text="👁")
-
-        eye_btn = ttk.Button(pwd_frame, text="👁", width=3,
-                             command=lambda: [show_password_var.set(not show_password_var.get()), toggle_password()])
-        eye_btn.pack(side=tk.RIGHT, padx=(2, 0))
+            PasswordGeneratorDialog(dialog, self.password_generator, set_password)
 
         ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(2, 0))
         fields['password'] = password_entry
         row += 1
 
-        # URL
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         url_entry = ttk.Entry(form_frame, width=40)
         url_entry.insert(0, entry.get('url', ''))
@@ -902,7 +931,6 @@ class MainWindow:
         fields['url'] = url_entry
         row += 1
 
-        # Category
         ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"],
                                       width=37, state="readonly")
@@ -911,7 +939,6 @@ class MainWindow:
         fields['category'] = category_combo
         row += 1
 
-        # Tags
         ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.insert(0, entry.get('tags', ''))
@@ -919,7 +946,6 @@ class MainWindow:
         fields['tags'] = tags_entry
         row += 1
 
-        # Notes
         ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.insert(1.0, entry.get('notes', ''))
@@ -930,40 +956,18 @@ class MainWindow:
         form_frame.grid_columnconfigure(1, weight=1)
 
         def save():
-            # Валидация Title
             title = fields['title'].get().strip()
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
-            if not any(c.isalpha() for c in title):
-                messagebox.showerror("Error", "Title must contain at least one letter")
-                return
-
-            # Валидация URL
-            url = fields['url'].get().strip()
-            if url:
-                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
-                if not is_valid_url:
-                    if not messagebox.askyesno("Warning",
-                                               f"'{url}' doesn't look like a valid URL.\nContinue anyway?"):
-                        return
-
-            # Валидация Tags
-            tags = fields['tags'].get().strip()
-            if tags:
-                allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
-                if not all(c in allowed for c in tags):
-                    messagebox.showerror("Error",
-                                         "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
-                    return
 
             updated_data = {
                 'title': title,
                 'username': fields['username'].get().strip(),
                 'password': fields['password'].get(),
-                'url': url,
+                'url': fields['url'].get().strip(),
                 'category': fields['category'].get(),
-                'tags': tags,
+                'tags': fields['tags'].get().strip(),
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
 
@@ -978,18 +982,16 @@ class MainWindow:
             except Exception as e:
                 messagebox.showerror("Error", f"Update failed: {e}")
 
-
-
-
-
-        ttk.Button(form_frame, text="Save", command=save).grid(row=row, column=0, columnspan=2, pady=10)
-        ttk.Button(form_frame, text="Cancel", command=dialog.destroy).grid(row=row + 1, column=0, columnspan=2, pady=5)
+        button_frame = ttk.Frame(scrollable_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
     def _delete_entry(self):
-        """Delete selected entry with confirmation"""
+        """Delete selected entry"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
@@ -1000,14 +1002,12 @@ class MainWindow:
             return
 
         count = len(selected_rows)
-        msg = f"Are you sure you want to delete {count} entry{'s' if count > 1 else ''}?\n\nDeleted entries can be restored from the backup."
+        msg = f"Are you sure you want to delete {count} entry{'s' if count > 1 else ''}?"
         if not messagebox.askyesno("Confirm Delete", msg):
             return
 
         deleted = 0
-
         for row in selected_rows:
-            print(f"DEBUG DELETE: id={row.get('id')}")
             try:
                 if self.entry_manager.delete_entry(str(row.get('id', '')), soft_delete=True):
                     deleted += 1
@@ -1018,8 +1018,7 @@ class MainWindow:
         self.status_label.config(text=f"Deleted {deleted} entries")
 
     def delete_entry_by_id(self, entry_id):
-        """Delete entry by ID (for context menu)"""
-
+        """Delete entry by ID"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
@@ -1028,8 +1027,7 @@ class MainWindow:
             messagebox.showerror("Error", "No entry selected")
             return
 
-        msg = "Are you sure you want to delete this entry?"
-        if not messagebox.askyesno("Confirm Delete", msg):
+        if not messagebox.askyesno("Confirm Delete", "Delete this entry?"):
             return
 
         try:
@@ -1039,11 +1037,7 @@ class MainWindow:
             else:
                 messagebox.showerror("Error", "Failed to delete entry")
         except Exception as e:
-            print(f"Delete exception: {e}")
             messagebox.showerror("Error", f"Delete failed: {e}")
-
-
-
 
     def _toggle_password_visibility(self):
         """Toggle password visibility in table"""
@@ -1057,7 +1051,6 @@ class MainWindow:
             return
 
         def use_password(password):
-            # Placeholder for future clipboard/integration
             self.root.clipboard_clear()
             self.root.clipboard_append(password)
             self.status_label.config(text="Password copied to clipboard")
@@ -1065,7 +1058,7 @@ class MainWindow:
         PasswordGeneratorDialog(self.root, self.password_generator, use_password)
 
     def _on_search_change(self, *args):
-        """Handle search text change with debouncing"""
+        """Handle search text change"""
         if hasattr(self, '_search_after') and self._search_after is not None:
             try:
                 self.root.after_cancel(self._search_after)
@@ -1075,10 +1068,7 @@ class MainWindow:
 
     def _perform_search(self):
         """Perform actual search"""
-        print(f"🔍 PERFORMING SEARCH FOR: '{self.search_var.get()}'")
         self._load_vault_data()
-        self.table.refresh()
-        self.table.update_idletasks()
 
     def _clear_search(self):
         """Clear search field"""
@@ -1107,8 +1097,7 @@ class MainWindow:
     def _restore_database(self):
         """Restore database from backup"""
         from tkinter import filedialog
-        if not messagebox.askyesno("Warning",
-                                   "Restoring will overwrite current data.\nMake sure you have a backup.\n\nContinue?"):
+        if not messagebox.askyesno("Warning", "Restoring will overwrite current data.\nContinue?"):
             return
         file_path = filedialog.askopenfilename(filetypes=[("Database files", "*.db"), ("All files", "*.*")])
         if file_path:
@@ -1121,14 +1110,18 @@ class MainWindow:
     def _show_about(self):
         """Show about dialog"""
         about_text = """CryptoSafe Manager
-    Version 1.0 (Sprint 3)
-    A secure password manager with AES-256-GCM encryption.
-    Features:
-    • Per-entry AES-256-GCM encryption
-    • Secure password generator with strength analysis
-    • Full-text search and filtering
-    • Soft delete with restore capability
-    © 2026 CryptoSafe Team"""
+        Version 1.0 (Sprint 5)
+        A secure password manager with AES-256-GCM encryption and tamper-evident audit logging.
+
+        Features:
+        • Per-entry AES-256-GCM encryption
+        • Secure password generator with strength analysis
+        • Full-text search and filtering
+        • Tamper-evident audit logging with cryptographic signatures
+        • Secure clipboard with auto-clear
+        • Soft delete with restore capability
+
+        © 2026 CryptoSafe Single"""
         messagebox.showinfo("About", about_text)
 
     def _quit(self):
@@ -1141,17 +1134,14 @@ class MainWindow:
             self.root.destroy()
 
     def _show_clipboard_settings(self):
-        """Show clipboard settings dialog (Sprint 4)"""
-        from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettingsDialog
-        from tkinter import messagebox
-
+        """Show clipboard settings dialog"""
         if not self.clipboard:
             messagebox.showwarning("Not Ready", "Clipboard service not initialized")
             return
         ClipboardSettingsDialog(self.root, self.clipboard, self.config)
 
     def _clear_clipboard_manually(self):
-        """Manually clear clipboard (Sprint 4)"""
+        """Manually clear clipboard"""
         if self.clipboard:
             if self.clipboard.clear(force=True, reason="manual"):
                 self.status_label.config(text="Clipboard cleared")
@@ -1159,31 +1149,18 @@ class MainWindow:
                     self.clipboard_indicator.update_status()
 
     def copy_to_clipboard(self, text: str, data_type: str = "password", entry_id: str = None):
-        """Copy text to clipboard via service"""
-        print(f"=== copy_to_clipboard called, text length={len(text)}, data_type={data_type} ===")
-        print(f"=== self.clipboard = {self.clipboard} ===")
-
+        """Copy text to clipboard"""
         if not self.clipboard:
-            print("=== No clipboard service, using fallback ===")
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
             self.status_label.config(text=f"Copied {data_type} (basic mode)")
             return
 
-        print("=== Calling clipboard.copy_to_clipboard ===")
         if self.clipboard.copy_to_clipboard(text, data_type, entry_id):
-            print("=== Copy successful ===")
             self.status_label.config(text=f"Copied {data_type} - will clear in {self.clipboard.timeout}s")
         else:
-            print("=== Copy FAILED ===")
             self.status_label.config(text=f"Failed to copy {data_type}")
-
 
     def run(self):
         """Run the main application"""
         self.root.mainloop()
-
-
-
-
-#copy_to_clipboard
