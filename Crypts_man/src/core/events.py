@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Any
 from enum import Enum
 
 
+# обновила EventType
 class EventType(Enum):
     ENTRY_ADDED = "entry_added"
     ENTRY_UPDATED = "entry_updated"
@@ -11,11 +12,13 @@ class EventType(Enum):
     USER_LOGGED_OUT = "user_logged_out"
     CLIPBOARD_COPIED = "clipboard_copied"
     CLIPBOARD_CLEARED = "clipboard_cleared"
-    # Sprint 4 additions
     CLIPBOARD_WILL_CLEAR = "clipboard_will_clear"
     CLIPBOARD_EXTERNAL_CHANGE = "clipboard_external_change"
     CLIPBOARD_SUSPICIOUS_ACCESS = "clipboard_suspicious_access"
     CLIPBOARD_BLOCKED = "clipboard_blocked"
+    AUDIT_TAMPER_DETECTED = "audit.tamper_detected"     #5
+    AUDIT_VERIFICATION_COMPLETE = "audit.verification_complete"     #5
+    AUDIT_EXPORT_CREATED = "audit.export_created"     #5
 
 class EventSystem:
     """Simple event bus for decoupled communication"""

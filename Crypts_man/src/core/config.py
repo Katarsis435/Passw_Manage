@@ -12,9 +12,10 @@ class Config:
         "database_path": str(Path.home() / ".cryptosafe" / "vault.db"),
         "encryption_enabled": True,
         "clipboard_timeout": 15,
-        "clipboard_security_level": "standard",  #SPR4
-        "accelerate_on_detection": True,        #SPR4
-        "suspicious_threshold": 5,             #SPR4
+        "clipboard_security_level": "secure",
+        "accelerate_on_detection": True,
+        "suspicious_threshold": 5,
+        "clipboard_notifications": True,
         "auto_lock_minutes": 5,
         "theme": "default",
         "language": "en",

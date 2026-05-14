@@ -170,7 +170,7 @@ class Database:
             if 'tags' not in columns:
                 c.execute("ALTER TABLE vault_entries ADD COLUMN tags TEXT")
 
-            # 3. ⚠️ ВАЖНО: Если id INTEGER, а нужно TEXT для UUID — миграция данных
+            # 3. ВАЖНО: Если id INTEGER, а нужно TEXT для UUID — миграция данных
             if columns.get('id') == 'INTEGER':
                 self._safe_migrate_id_to_text(c)
 
@@ -571,6 +571,115 @@ class Database:
                 """, (limit, offset))
             return [dict(row) for row in c.fetchall()]
 
+    def get_audit_entries(self, limit: int = 100, offset: int = 0,
+                          event_type: str = None, severity: str = None,
+                          start_date: str = None, end_date: str = None) -> List[Dict]:
+        """Get audit entries with filtering"""
+        query = "SELECT * FROM audit_log WHERE 1=1"
+        params = []
+
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+
+        if severity:
+            query += " AND severity = ?"
+            params.append(severity)
+
+        if start_date:
+            query += " AND timestamp >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND timestamp <= ?"
+            params.append(end_date)
+
+        query += " ORDER BY sequence_number DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        with self.cursor() as c:
+            c.execute(query, params)
+            rows = c.fetchall()
+
+        entries = []
+        for row in rows:
+            if isinstance(row, sqlite3.Row):
+                entries.append({
+                  'sequence_number': row['sequence_number'],
+                  'timestamp': row['timestamp'],
+                  'event_type': row['event_type'],
+                  'severity': row['severity'],
+                  'user_id': row['user_id'],
+                  'source': row['source'],
+                  'entry_data': row['entry_data'],
+                  'entry_hash': row['entry_hash'],
+                  'signature': row['signature']
+                })
+            else:
+                entries.append({
+                    'sequence_number': row[0],
+                    'previous_hash': row[1],
+                    'entry_data': row[2],
+                    'entry_hash': row[3],
+                    'signature': row[4],
+                    'timestamp': row[5],
+                    'event_type': row[6],
+                    'severity': row[7],
+                    'user_id': row[8],
+                    'source': row[9],
+                    'entry_id': row[10]
+                })
+        return entries
+
+    def get_audit_stats(self) -> Dict[str, Any]:
+        """Get audit log statistics"""
+        with self.cursor() as c:
+            c.execute("SELECT COUNT(*) FROM audit_log")
+            total = c.fetchone()[0]
+
+            c.execute("""
+                    SELECT COUNT(DISTINCT user_id) FROM audit_log WHERE user_id != 'system'
+                """)
+            unique_users = c.fetchone()[0] or 0
+
+            c.execute("""
+                    SELECT event_type, COUNT(*) as cnt
+                    FROM audit_log
+                    GROUP BY event_type
+                    ORDER BY cnt DESC
+                    LIMIT 5
+                """)
+            top_events = [{'event': row[0], 'count': row[1]} for row in c.fetchall()]
+
+            c.execute("""
+                    SELECT severity, COUNT(*) as cnt
+                    FROM audit_log
+                    GROUP BY severity
+                """)
+            by_severity = {row[0]: row[1] for row in c.fetchall()}
+
+        return {
+            'total_entries': total,
+            'unique_users': unique_users,
+            'top_events': top_events,
+            'by_severity': by_severity
+        }
+
+    def get_latest_audit_sequence(self) -> int:
+        """Get latest sequence number"""
+        with self.cursor() as c:
+            c.execute("SELECT MAX(sequence_number) FROM audit_log")
+            result = c.fetchone()[0]
+            return result if result else 0
+
+
+
+
+
+
+
+
+
     def get_setting(self, key: str, default: Any = None) -> Any:
         """Get a setting value"""
         with self.cursor() as c:
@@ -724,7 +833,6 @@ class Database:
             # Pool stats
             stats['pool_size'] = self.max_connections
             stats['pool_available'] = self._connection_pool.qsize()
-
         return stats
 
     def close(self):

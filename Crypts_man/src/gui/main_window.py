@@ -12,6 +12,16 @@ from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
 from Crypts_man.src.gui.widgets.clipboard_indicator import ClipboardIndicator
 from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettingsDialog
 
+from Crypts_man.src.core.audit.audit_logger import AuditLogger, AuditEventType, AuditSeverity
+from Crypts_man.src.core.audit.log_signer import AuditLogSigner
+from Crypts_man.src.core.audit.log_verifier import LogVerifier
+from Crypts_man.src.gui.widgets.audit_log_viewer import AuditLogViewer
+
+
+
+
+
+
 class MainWindow:
     """Main application window with vault management"""
 
@@ -35,6 +45,12 @@ class MainWindow:
         self.auth_manager = None
         self._vault_ready = False
         self.clipboard = None
+
+        #5
+        self.audit_logger = None
+        self.audit_signer = None
+        self.audit_verifier = None
+        self.periodic_verification_job = None
 
         # UI state
         self.show_passwords = False
@@ -165,16 +181,20 @@ class MainWindow:
         """Handle entry changes"""
         self._load_vault_data()
 
+
     def _on_user_logged_in(self, data):
         """Handle user login event - FIXED & STREAMLINED"""
         print("🔓 USER LOGGED IN EVENT")
         self.lock_status.config(text="🔓 Unlocked", foreground="green")
+
         # Безопасная инициализация (защита от двойного вызова)
         if not self._vault_ready:
             self._init_vault_components()
             self._load_vault_data()
-            #Initialize clipboard service (Sprint 4)
-            #self._init_clipboard_service()
+            # Initialize clipboard service (Sprint 4)
+            self._init_clipboard_service()
+            #  НОВОЕ: Initialize audit system (Sprint 5)
+            self._init_audit_system()
 
         # Надёжное включение кнопок через after()
         def enable_buttons_safe():
@@ -193,11 +213,17 @@ class MainWindow:
         """Initialize clipboard service after login (Sprint 4)"""
         from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
         from Crypts_man.src.core.events import events
-        if not self.clipboard:
+
+        if not hasattr(self, 'clipboard') or self.clipboard is None:
+            print("=== Initializing Clipboard Service ===")
             self.clipboard = ClipboardService(self.config, events, self.root)
+
             if self.clipboard_indicator:
                 self.clipboard_indicator.set_clipboard_service(self.clipboard)
                 self.clipboard_indicator.start_updates()
+            print("=== Clipboard Service initialized ===")
+
+
 
 
     def _on_user_logged_out(self, data):
@@ -514,43 +540,43 @@ class MainWindow:
         self.root.after(100, self._show_login)
 
     def _load_vault_data(self):
-        """Load vault data using EntryManager"""
-        if not self._vault_ready or not self.entry_manager:
-            return
+          """Load vault data using EntryManager"""
+          if not self._vault_ready or not self.entry_manager:
+              return
 
-        try:
-            category = self.category_filter.get()
-            if category == "All":
-                category = None
-
-
-            search = self.search_var.get().strip() or None
-            print(f"🔍 SEARCH DEBUG: search='{search}', category='{category}'")
-            print(f"DEBUG: search='{search}', category='{category}'")  # <-- ДОБАВЬ ЭТО
-            entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
-            print(f"DEBUG: found {len(entries)} entries")  # <-- И ЭТО
-            print(f"🔍 SEARCH DEBUG: found {len(entries)} entries")
+          try:
+              category = self.category_filter.get()
+              if category == "All":
+                  category = None
 
 
-            table_data = []
-            for entry in entries:
-                table_data.append({
-                    'id': str(entry.get('id', '')),
-                    'title': entry.get('title', ''),
-                    'username': entry.get('username', ''),
-                    'password_masked': '••••••••',
-                    'url': entry.get('url', ''),
-                    'updated_at': str(entry.get('updated_at', ''))[:10] if entry.get('updated_at') else '',
-                    'category': entry.get('category', '')
-                })
+              search = self.search_var.get().strip() or None
+              print(f"🔍 SEARCH DEBUG: search='{search}', category='{category}'")
+              print(f"DEBUG: search='{search}', category='{category}'")  # <-- ДОБАВЬ ЭТО
+              entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
+              print(f"DEBUG: found {len(entries)} entries")  # <-- И ЭТО
+              print(f"🔍 SEARCH DEBUG: found {len(entries)} entries")
 
-            self.table.set_data(table_data, self.show_passwords)
-            self.status_label.config(text=f"Loaded {len(table_data)} entries")
-        except Exception as e:
-            print(f"Error loading entries: {e}")
-            import traceback
-            traceback.print_exc()
-            self.status_label.config(text="Error loading entries")
+
+              table_data = []
+              for entry in entries:
+                  table_data.append({
+                      'id': str(entry.get('id', '')),
+                      'title': entry.get('title', ''),
+                      'username': entry.get('username', ''),
+                      'password_masked': '••••••••',
+                      'url': entry.get('url', ''),
+                      'updated_at': str(entry.get('updated_at', ''))[:10] if entry.get('updated_at') else '',
+                      'category': entry.get('category', '')
+                  })
+
+              self.table.set_data(table_data, self.show_passwords)
+              self.status_label.config(text=f"Loaded {len(table_data)} entries")
+          except Exception as e:
+              print(f"Error loading entries: {e}")
+              import traceback
+              traceback.print_exc()
+              self.status_label.config(text="Error loading entries")
 
     def _add_entry(self):
         """Add new vault entry with enhanced dialog"""
