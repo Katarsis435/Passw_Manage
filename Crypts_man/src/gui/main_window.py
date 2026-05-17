@@ -15,20 +15,17 @@ from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettin
 
 class MainWindow:
     """Main application window with vault management"""
-
     def __init__(self, config, db):
         self.config = config
         self.db = db
         self.root = tk.Tk()
         self.root.title("CryptoSafe Manager")
         self.root.geometry("1200x700")
-
         # Buttons
         self.add_button = None
         self.edit_button = None
         self.delete_button = None
         self.gen_button = None
-
         # Managers (initialized after auth)
         self.entry_manager = None
         self.password_generator = PasswordGenerator()
@@ -36,31 +33,27 @@ class MainWindow:
         self.auth_manager = None
         self._vault_ready = False
         self.clipboard = None
-
         # Audit components (Sprint 5)
         self.audit_logger = None
         self.audit_signer = None
         self.audit_verifier = None
         self.periodic_verification_job = None
-
         # UI state
         self.show_passwords = False
         self.current_search = ""
         self._search_after = None
-
         self._setup_ui()
         self._bind_events()
         self._bind_shortcuts()
-
         # Show login after UI is rendered
         self.root.after(100, self._show_login)
+
 
     def _setup_ui(self):
         """Setup main UI components"""
         # Menu bar
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Lock Vault", command=self._lock_vault, accelerator="Ctrl+L")
@@ -69,7 +62,6 @@ class MainWindow:
         file_menu.add_command(label="Restore Database", command=self._restore_database)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._quit)
-
         vault_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Vault", menu=vault_menu)
         vault_menu.add_command(label="Add Entry", command=self._add_entry, accelerator="Ctrl+N")
@@ -77,7 +69,6 @@ class MainWindow:
         vault_menu.add_command(label="Delete Entry", command=self._delete_entry, accelerator="Del")
         vault_menu.add_separator()
         vault_menu.add_command(label="Generate Password", command=self._show_password_generator, accelerator="Ctrl+G")
-
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
         view_menu.add_command(label="Toggle Password Visibility", command=self._toggle_password_visibility,
@@ -87,19 +78,16 @@ class MainWindow:
         view_menu.add_command(label="Clear Clipboard Now", command=self._clear_clipboard_manually,
                               accelerator="Ctrl+Shift+C")
         view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
-
-        # Security menu (Sprint 5)
+        # Security menu (Spr 5)
         security_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Security", menu=security_menu)
         security_menu.add_command(label="View Audit Log", command=self._show_audit_viewer, accelerator="Ctrl+Shift+A")
         security_menu.add_command(label="Verify Audit Integrity", command=self._verify_audit_logs)
         security_menu.add_separator()
         security_menu.add_command(label="Export Audit Logs", command=self._export_audit_logs)
-
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
-
         # Toolbar
         toolbar = ttk.Frame(self.root)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -114,7 +102,6 @@ class MainWindow:
                                      state=tk.DISABLED)
         self.gen_button.pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-
         # Search frame
         search_frame = ttk.Frame(self.root)
         search_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -124,7 +111,6 @@ class MainWindow:
         self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
         self.search_entry.pack(side=tk.LEFT, padx=5)
         ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side=tk.LEFT, padx=2)
-
         # Filter frame
         filter_frame = ttk.Frame(self.root)
         filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -134,7 +120,6 @@ class MainWindow:
         self.category_filter.set("All")
         self.category_filter.bind('<<ComboboxSelected>>', self._on_filter_change)
         self.category_filter.pack(side=tk.LEFT, padx=5)
-
         # Main table
         table_frame = ttk.Frame(self.root)
         table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -143,18 +128,17 @@ class MainWindow:
         self.table.parent = self
         self.table.edit_entry_callback = self._edit_entry
         self.table.delete_entry_callback = self._delete_entry
-
         # Status bar
         self.status_frame = ttk.Frame(self.root)
         self.status_frame.pack(side=tk.BOTTOM, fill=tk.X)
         self.status_label = ttk.Label(self.status_frame, text="Ready", relief=tk.SUNKEN)
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
         # Clipboard indicator (Sprint 4)
         self.clipboard_indicator = ClipboardIndicator(self.status_frame, self)
         self.clipboard_indicator.pack(side=tk.RIGHT, padx=5)
         self.lock_status = ttk.Label(self.status_frame, text="🔒 Locked", foreground="red")
         self.lock_status.pack(side=tk.RIGHT, padx=5)
+
 
     def _bind_shortcuts(self):
         """Bind keyboard shortcuts"""
@@ -167,7 +151,8 @@ class MainWindow:
         self.root.bind('<Control-g>', lambda e: self._show_password_generator())
         self.root.bind('<Control-f>', lambda e: self.search_entry.focus_set())
         self.root.bind('<Control-Shift-C>', lambda e: self._clear_clipboard_manually())
-        self.root.bind('<Control-Shift-A>', lambda e: self._show_audit_viewer())  # Sprint 5
+        self.root.bind('<Control-Shift-A>', lambda e: self._show_audit_viewer()) #spr 5
+
 
     def _bind_events(self):
         """Bind event system callbacks"""
@@ -176,6 +161,7 @@ class MainWindow:
         events.subscribe(EventType.ENTRY_DELETED, self._on_entry_changed)
         events.subscribe(EventType.USER_LOGGED_IN, self._on_user_logged_in)
         events.subscribe(EventType.USER_LOGGED_OUT, self._on_user_logged_out)
+
 
     def _on_entry_changed(self, data):
         """Handle entry changes"""
@@ -192,11 +178,11 @@ class MainWindow:
                 entry_id=data.get('id')
             )
 
+
     def _on_user_logged_in(self, data):
         """Handle user login event"""
         print("🔓 USER LOGGED IN EVENT")
         self.lock_status.config(text="🔓 Unlocked", foreground="green")
-
         if not self._vault_ready:
             self._init_vault_components()
             # Убедимся что ключ загружен
@@ -210,6 +196,7 @@ class MainWindow:
             self._load_vault_data()
             self._init_clipboard_service()
 
+
     def _retry_audit_init(self):
         """Retry audit initialization after key is available"""
         if self.key_manager and self.key_manager.get_cached_encryption_key():
@@ -218,8 +205,6 @@ class MainWindow:
         else:
             print("⚠ Still waiting for encryption key...")
             self.root.after(1000, self._retry_audit_init)
-
-
 
         def enable_buttons_safe():
             try:
@@ -230,8 +215,8 @@ class MainWindow:
                 print("✓ Vault buttons enabled")
             except tk.TclError:
                 pass
-
         self.root.after(50, enable_buttons_safe)
+
 
     def _init_audit_system(self):
         """Initialize audit logging system after authentication"""
@@ -239,49 +224,51 @@ class MainWindow:
             from Crypts_man.src.core.audit.audit_logger import AuditLogger, AuditEventType, AuditSeverity
             from Crypts_man.src.core.audit.log_signer import AuditLogSigner
             from Crypts_man.src.core.audit.log_verifier import LogVerifier
-
+            print("=== INITIALIZING AUDIT SYSTEM ===")
             # Create signer
             self.audit_signer = AuditLogSigner(self.key_manager, self.config)
-
+            print("✓ Audit signer created")
             # Create logger
             self.audit_logger = AuditLogger(self.db, self.audit_signer, self.config)
-
+            print("✓ Audit logger created")
             # Create verifier
             self.audit_verifier = LogVerifier(self.db, self.audit_signer)
-
+            print("✓ Audit verifier created")
             # Store public key
             self.audit_signer.store_public_key(self.db)
-
+            print("✓ Public key stored")
             # Subscribe to events for automatic logging
             self._subscribe_audit_events()
-
-            # Start periodic verification
-            self._start_periodic_verification()
-
+            print("✓ Subscribed to audit events")
             # Log successful initialization
             self.audit_logger.log_event(
-              event_type=AuditEventType.SYSTEM_UNLOCK.value,
-              severity=AuditSeverity.INFO.value,
-              source="main_window",
-              details={'message': 'Audit system initialized'},
-              user_id='user'
+                event_type=AuditEventType.SYSTEM_UNLOCK.value,
+                severity=AuditSeverity.INFO.value,
+                source="main_window",
+                details={'message': 'Audit system initialized'},
+                user_id='user'
             )
-
-            print("✓ Audit system initialized")
+            print("✓ Audit system initialized successfully")
         except Exception as e:
             print(f"⚠ Audit system initialization failed: {e}")
             import traceback
             traceback.print_exc()
 
+
     def _subscribe_audit_events(self):
         """Subscribe to system events for automatic audit logging"""
+        from Crypts_man.src.core.audit.audit_logger import AuditEventType, AuditSeverity
         if not self.audit_logger:
+            print("No audit logger, skipping subscriptions")
             return
+        print("Setting up audit event subscriptions...")
 
+        # Subscribe to entry events
         def log_entry_added(data):
+            print(f"AUDIT: Entry added - {data}")
             self.audit_logger.log_event(
-                event_type="vault.entry.create",
-                severity="INFO",
+                event_type=AuditEventType.VAULT_ENTRY_CREATE.value,
+                severity=AuditSeverity.INFO.value,
                 source="vault",
                 details={'entry_id': data.get('id'), 'title': data.get('title')},
                 user_id='user',
@@ -289,9 +276,10 @@ class MainWindow:
             )
 
         def log_entry_updated(data):
+            print(f"AUDIT: Entry updated - {data}")
             self.audit_logger.log_event(
-                event_type="vault.entry.update",
-                severity="INFO",
+                event_type=AuditEventType.VAULT_ENTRY_UPDATE.value,
+                severity=AuditSeverity.INFO.value,
                 source="vault",
                 details={'entry_id': data.get('id'), 'title': data.get('title')},
                 user_id='user',
@@ -299,18 +287,70 @@ class MainWindow:
             )
 
         def log_entry_deleted(data):
+            print(f"AUDIT: Entry deleted - {data}")
             self.audit_logger.log_event(
-                event_type="vault.entry.delete",
-                severity="WARN",
+                event_type=AuditEventType.VAULT_ENTRY_DELETE.value,
+                severity=AuditSeverity.WARN.value,
                 source="vault",
                 details={'entry_id': data.get('id'), 'soft': data.get('soft', True)},
                 user_id='user',
                 entry_id=data.get('id')
             )
 
+        # Subscribe to auth events
+        def log_login(data):
+            print(f"AUDIT: User logged in - {data}")
+            self.audit_logger.log_event(
+                event_type=AuditEventType.AUTH_LOGIN_SUCCESS.value,
+                severity=AuditSeverity.INFO.value,
+                source="auth",
+                details={'timestamp': str(data.get('timestamp')) if data else ''},
+                user_id='user'
+            )
+
+        def log_logout(data):
+            print("AUDIT: User logged out")
+            self.audit_logger.log_event(
+                event_type=AuditEventType.AUTH_LOGOUT.value,
+                severity=AuditSeverity.INFO.value,
+                source="auth",
+                details={},
+                user_id='user'
+            )
+
+        # Subscribe to clipboard events
+        def log_clipboard_copy(data):
+            print(f"AUDIT: Clipboard copy - {data}")
+            self.audit_logger.log_event(
+                event_type=AuditEventType.CLIPBOARD_COPY.value,
+                severity=AuditSeverity.INFO.value,
+                source="clipboard",
+                details={'data_type': data.get('data_type'), 'entry_id': data.get('source_entry_id')},
+                user_id='user',
+                entry_id=data.get('source_entry_id')
+            )
+
+        def log_clipboard_clear(data):
+            print(f"AUDIT: Clipboard cleared - {data}")
+            self.audit_logger.log_event(
+                event_type=AuditEventType.CLIPBOARD_CLEAR.value,
+                severity=AuditSeverity.INFO.value,
+                source="clipboard",
+                details={'reason': data.get('reason') if data else 'manual'},
+                user_id='user'
+            )
+
+        # Register callbacks
         events.subscribe(EventType.ENTRY_ADDED, log_entry_added)
         events.subscribe(EventType.ENTRY_UPDATED, log_entry_updated)
         events.subscribe(EventType.ENTRY_DELETED, log_entry_deleted)
+        events.subscribe(EventType.USER_LOGGED_IN, log_login)
+        events.subscribe(EventType.USER_LOGGED_OUT, log_logout)
+        events.subscribe(EventType.CLIPBOARD_COPIED, log_clipboard_copy)
+        events.subscribe(EventType.CLIPBOARD_CLEARED, log_clipboard_clear)
+        print(
+            "✓ Subscribed to: ENTRY_ADDED, ENTRY_UPDATED, ENTRY_DELETED, USER_LOGGED_IN, USER_LOGGED_OUT, CLIPBOARD_COPIED, CLIPBOARD_CLEARED")
+
 
     def _start_periodic_verification(self):
         """Start periodic log verification"""
@@ -323,12 +363,11 @@ class MainWindow:
                         self._handle_audit_tampering(result)
                 except Exception as e:
                     print(f"Periodic verification failed: {e}")
-
             if self.periodic_verification_job:
                 self.root.after_cancel(self.periodic_verification_job)
             self.periodic_verification_job = self.root.after(86400000, verify_periodically)  # 24 hours
-
         self.root.after(60000, verify_periodically)  # Start after 1 minute
+
 
     def _handle_audit_tampering(self, result):
         """Handle detected audit log tampering"""
@@ -340,29 +379,31 @@ class MainWindow:
             f"Please verify your database integrity."
         )
 
+
     def _show_audit_viewer(self):
         """Show audit log viewer dialog"""
-        if not self.audit_logger:
-            messagebox.showwarning("Not Available", "Audit system not initialized")
+        if not hasattr(self, 'audit_logger') or not self.audit_logger:
+            messagebox.showwarning("Not Available", "Audit system not initialized yet.\nPlease wait or re-login.")
             return
+        try:
+            from Crypts_man.src.gui.dialogs.audit_viewer_dialog import AuditViewerDialog
+            AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open audit viewer: {e}")
 
-        from Crypts_man.src.gui.dialogs.audit_viewer_dialog import AuditViewerDialog
-        AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
 
     def _verify_audit_logs(self):
         """Manually verify audit logs"""
-        if not self.audit_verifier:
+        if not hasattr(self, 'audit_verifier') or not self.audit_verifier:
             messagebox.showwarning("Not Available", "Audit system not initialized")
             return
-
+        # Show progress dialog
         progress = tk.Toplevel(self.root)
         progress.title("Verifying...")
         progress.geometry("300x100")
         progress.transient(self.root)
-
         label = ttk.Label(progress, text="Verifying audit log integrity...")
         label.pack(pady=20)
-
         progress_bar = ttk.Progressbar(progress, mode='indeterminate')
         progress_bar.pack(fill=tk.X, padx=20)
         progress_bar.start()
@@ -373,14 +414,13 @@ class MainWindow:
                 self.root.after(0, lambda: self._show_verification_result(result, progress))
             except Exception as e:
                 self.root.after(0, lambda: self._show_verification_error(str(e), progress))
-
         import threading
         threading.Thread(target=do_verify, daemon=True).start()
+
 
     def _show_verification_result(self, result, progress_dialog):
         """Show verification result"""
         progress_dialog.destroy()
-
         if result.verified:
             messagebox.showinfo(
                 "Verification Complete",
@@ -396,23 +436,29 @@ class MainWindow:
                 f"Total entries: {result.total_entries}\n"
                 f"Valid entries: {result.valid_entries}\n"
                 f"Invalid signatures: {len(result.invalid_signatures)}\n"
-                f"Chain breaks: {len(result.chain_breaks)}\n\n"
-                f"Please check security logs for details."
+                f"Chain breaks: {len(result.chain_breaks)}\n"
+                f"Hash mismatches: {len(result.hash_mismatches)}"
             )
+
 
     def _show_verification_error(self, error, progress_dialog):
         """Show verification error"""
         progress_dialog.destroy()
         messagebox.showerror("Verification Error", f"Failed to verify logs: {error}")
 
+
     def _export_audit_logs(self):
         """Export audit logs"""
-        if not self.audit_logger:
+        if not hasattr(self, 'audit_logger') or not self.audit_logger:
             messagebox.showwarning("Not Available", "Audit system not initialized")
             return
 
-        from Crypts_man.src.gui.dialogs.audit_export_dialog import AuditExportDialog
-        AuditExportDialog(self.root, self.audit_logger, self.audit_signer)
+        try:
+            from Crypts_man.src.gui.dialogs.audit_export_dialog import AuditExportDialog
+            AuditExportDialog(self.root, self.audit_logger, self.audit_signer)
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open export dialog: {e}")
+
 
     def _init_clipboard_service(self):
         """Initialize clipboard service after login"""
@@ -421,6 +467,7 @@ class MainWindow:
             if self.clipboard_indicator:
                 self.clipboard_indicator.set_clipboard_service(self.clipboard)
                 self.clipboard_indicator.start_updates()
+
 
     def _on_user_logged_out(self, data):
         """Handle user logout event"""
@@ -435,33 +482,29 @@ class MainWindow:
             if btn and btn.winfo_exists():
                 btn.config(state=tk.DISABLED)
 
+
     def _init_vault_components(self):
         """Initialize vault components AFTER authentication"""
         from Crypts_man.src.core.vault.entry_manager import EntryManager
-
         print("=== _init_vault_components called ===")
-
         if not hasattr(self, 'key_manager') or self.key_manager is None:
-            print("⚠ KeyManager missing, creating fallback")
             from Crypts_man.src.core.key_manager import KeyManager
             self.key_manager = KeyManager(self.config)
-
         if not hasattr(self, 'auth_manager') or self.auth_manager is None:
-            print("⚠ AuthManager missing, creating fallback")
             from Crypts_man.src.core.authentication import AuthenticationManager
             self.auth_manager = AuthenticationManager(self.key_manager)
-
         encryption_key = self.key_manager.get_cached_encryption_key()
         if not encryption_key:
             encryption_key = self.auth_manager.get_encryption_key()
-
         print(f"Encryption key loaded: {encryption_key is not None}")
-
         if encryption_key and len(encryption_key) == 32:
             try:
                 self.entry_manager = EntryManager(self.db, self.key_manager)
                 self._vault_ready = True
                 print("✓ EntryManager initialized successfully")
+                # Инициализация аудит-системы
+                self._init_audit_system()
+
             except Exception as e:
                 print(f"✗ EntryManager failed: {e}")
                 import traceback
@@ -472,6 +515,7 @@ class MainWindow:
             print("✗ No valid encryption key")
             self._vault_ready = False
 
+
     def _show_login(self):
         """Show login dialog"""
         dialog = tk.Toplevel(self.root)
@@ -479,7 +523,6 @@ class MainWindow:
         dialog.geometry("400x300")
         dialog.transient(self.root)
         dialog.grab_set()
-
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
         y = (dialog.winfo_screenheight() // 2) - (300 // 2)
@@ -487,12 +530,10 @@ class MainWindow:
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(main_frame, text="CryptoSafe Manager", font=('Arial', 16, 'bold')).pack(pady=10)
-
         auth_hash = self.db.get_auth_hash()
         if not auth_hash:
             self._show_first_run_setup(dialog)
             return
-
         ttk.Label(main_frame, text="Enter Master Password: ").pack(pady=5)
         pwd_frame = ttk.Frame(main_frame)
         pwd_frame.pack(pady=5)
@@ -504,28 +545,25 @@ class MainWindow:
         def toggle_password():
             show_pwd.set(not show_pwd.get())
             password_entry.config(show="" if show_pwd.get() else "*")
-
         ttk.Button(pwd_frame, text="👁", width=3, command=toggle_password).pack(side=tk.LEFT, padx=(5, 0))
         error_label = ttk.Label(main_frame, text="", foreground="red")
         error_label.pack()
 
         def login_wrapper():
             self._do_login_action(password_entry, error_label, dialog)
-
         login_btn = ttk.Button(main_frame, text="Login", command=login_wrapper)
         login_btn.pack(pady=10)
         password_entry.bind('<Return>', lambda e: self._do_login_action(password_entry, error_label, dialog))
+
 
     def _do_login_action(self, password_entry, error_label, dialog):
         """Handle login action"""
         print("=== _do_login_action CALLED ===")
         password = password_entry.get()
         print(f"Password length: {len(password)}")
-
         if not password:
             error_label.config(text="Please enter password")
             return
-
         auth_hash_data = self.db.get_auth_hash()
         salt_data = self.db.get_encryption_salt()
 
@@ -570,6 +608,7 @@ class MainWindow:
             dialog.destroy()
         else:
             error_label.config(text="Invalid password")
+
 
     def _show_first_run_setup(self, parent):
         for widget in parent.winfo_children():
@@ -640,12 +679,14 @@ class MainWindow:
 
         ttk.Button(main_frame, text="Create Vault", command=do_setup).pack(pady=10)
 
+
     def _lock_vault(self):
         """Lock the vault"""
         if self.auth_manager:
             self.auth_manager.logout()
         self._on_user_logged_out(None)
         self.root.after(100, self._show_login)
+
 
     def _load_vault_data(self):
         """Load vault data using EntryManager"""
@@ -679,6 +720,7 @@ class MainWindow:
             import traceback
             traceback.print_exc()
             self.status_label.config(text="Error loading entries")
+
 
     def _add_entry(self):
         """Add new vault entry"""
@@ -827,6 +869,7 @@ class MainWindow:
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
 
     def _edit_entry(self):
         """Edit selected entry"""
@@ -990,6 +1033,7 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
+
     def _delete_entry(self):
         """Delete selected entry"""
         if not self._vault_ready or not self.entry_manager:
@@ -1017,6 +1061,7 @@ class MainWindow:
         self._load_vault_data()
         self.status_label.config(text=f"Deleted {deleted} entries")
 
+
     def delete_entry_by_id(self, entry_id):
         """Delete entry by ID"""
         if not self._vault_ready or not self.entry_manager:
@@ -1039,10 +1084,12 @@ class MainWindow:
         except Exception as e:
             messagebox.showerror("Error", f"Delete failed: {e}")
 
+
     def _toggle_password_visibility(self):
         """Toggle password visibility in table"""
         self.show_passwords = not self.show_passwords
         self.table.toggle_password_visibility()
+
 
     def _show_password_generator(self):
         """Show standalone password generator"""
@@ -1057,6 +1104,7 @@ class MainWindow:
 
         PasswordGeneratorDialog(self.root, self.password_generator, use_password)
 
+
     def _on_search_change(self, *args):
         """Handle search text change"""
         if hasattr(self, '_search_after') and self._search_after is not None:
@@ -1066,18 +1114,22 @@ class MainWindow:
                 pass
         self._search_after = self.root.after(500, self._perform_search)
 
+
     def _perform_search(self):
         """Perform actual search"""
         self._load_vault_data()
+
 
     def _clear_search(self):
         """Clear search field"""
         self.search_var.set("")
         self.search_entry.focus()
 
+
     def _on_filter_change(self, event=None):
         """Handle category filter change"""
         self._load_vault_data()
+
 
     def _backup_database(self):
         """Backup database"""
@@ -1094,6 +1146,7 @@ class MainWindow:
             else:
                 messagebox.showerror("Error", "Backup failed")
 
+
     def _restore_database(self):
         """Restore database from backup"""
         from tkinter import filedialog
@@ -1106,6 +1159,7 @@ class MainWindow:
                 self._load_vault_data()
             else:
                 messagebox.showerror("Error", "Restore failed")
+
 
     def _show_about(self):
         """Show about dialog"""
@@ -1124,6 +1178,7 @@ class MainWindow:
         © 2026 CryptoSafe Single"""
         messagebox.showinfo("About", about_text)
 
+
     def _quit(self):
         """Quit application"""
         if messagebox.askokcancel("Quit", "Are you sure you want to quit?"):
@@ -1133,12 +1188,14 @@ class MainWindow:
             self.root.quit()
             self.root.destroy()
 
+
     def _show_clipboard_settings(self):
         """Show clipboard settings dialog"""
         if not self.clipboard:
             messagebox.showwarning("Not Ready", "Clipboard service not initialized")
             return
         ClipboardSettingsDialog(self.root, self.clipboard, self.config)
+
 
     def _clear_clipboard_manually(self):
         """Manually clear clipboard"""
@@ -1147,6 +1204,7 @@ class MainWindow:
                 self.status_label.config(text="Clipboard cleared")
                 if self.clipboard_indicator:
                     self.clipboard_indicator.update_status()
+
 
     def copy_to_clipboard(self, text: str, data_type: str = "password", entry_id: str = None):
         """Copy text to clipboard"""
@@ -1160,6 +1218,7 @@ class MainWindow:
             self.status_label.config(text=f"Copied {data_type} - will clear in {self.clipboard.timeout}s")
         else:
             self.status_label.config(text=f"Failed to copy {data_type}")
+
 
     def run(self):
         """Run the main application"""
