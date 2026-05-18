@@ -88,6 +88,8 @@ class MainWindow:
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
+        security_menu.add_separator()
+        security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
         # Toolbar
         toolbar = ttk.Frame(self.root)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -185,16 +187,19 @@ class MainWindow:
         self.lock_status.config(text="🔓 Unlocked", foreground="green")
         if not self._vault_ready:
             self._init_vault_components()
-            # Убедимся что ключ загружен
-            if self.key_manager and self.key_manager.get_cached_encryption_key():
-                print("✓ Encryption key is available, initializing audit...")
-                self._init_audit_system()
-            else:
-                print("⚠ Waiting for encryption key...")
-                # Попробуем еще раз через 500ms
-                self.root.after(500, lambda: self._retry_audit_init())
             self._load_vault_data()
             self._init_clipboard_service()
+
+        def enable_buttons_safe():
+            try:
+                btns = [self.add_button, self.edit_button, self.delete_button, self.gen_button]
+                for btn in btns:
+                    if btn and btn.winfo_exists():
+                        btn.config(state=tk.NORMAL)
+                print("✓ Vault buttons enabled")
+            except tk.TclError:
+                pass
+        self.root.after(50, enable_buttons_safe)
 
 
     def _retry_audit_init(self):
@@ -502,9 +507,9 @@ class MainWindow:
                 self.entry_manager = EntryManager(self.db, self.key_manager)
                 self._vault_ready = True
                 print("✓ EntryManager initialized successfully")
-                # Инициализация аудит-системы
-                self._init_audit_system()
-
+                # Инициализация аудит-системы ТОЛЬКО ЕСЛИ ЕЩЕ НЕ ИНИЦИАЛИЗИРОВАНА
+                if not hasattr(self, 'audit_logger') or self.audit_logger is None:
+                    self._init_audit_system()
             except Exception as e:
                 print(f"✗ EntryManager failed: {e}")
                 import traceback
@@ -512,8 +517,8 @@ class MainWindow:
                 self._vault_ready = False
                 messagebox.showerror("Vault Error", f"Failed to init vault: {e}")
         else:
-            print("✗ No valid encryption key")
-            self._vault_ready = False
+          print("✗ No valid encryption key")
+          self._vault_ready = False
 
 
     def _show_login(self):
@@ -733,37 +738,31 @@ class MainWindow:
         dialog.geometry("550x650")
         dialog.transient(self.root)
         dialog.grab_set()
-
         canvas = tk.Canvas(dialog)
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-
         form_frame = ttk.Frame(scrollable_frame, padding="10")
         form_frame.pack(fill=tk.BOTH, expand=True)
         fields = {}
         row = 0
-
         ttk.Label(form_frame, text="Title*: ", foreground="black").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
         row += 1
-
         ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['username'] = username_entry
         row += 1
-
         ttk.Label(form_frame, text="Password*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=25)
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
         show_password_var = tk.BooleanVar(value=False)
 
         def toggle_password_visibility():
@@ -771,12 +770,10 @@ class MainWindow:
                 password_entry.config(show="")
             else:
                 password_entry.config(show="*")
-
         eye_btn = ttk.Button(pwd_frame, text="👁", width=3,
                              command=lambda: [show_password_var.set(not show_password_var.get()),
                                               toggle_password_visibility()])
         eye_btn.pack(side=tk.RIGHT, padx=(2, 0))
-
         strength_frame = ttk.Frame(form_frame)
         strength_frame.grid(row=row + 1, column=1, sticky=tk.W, padx=5, pady=2)
         strength_label = ttk.Label(strength_frame, text="")
@@ -791,7 +788,6 @@ class MainWindow:
             ratings = ["Очень слабый", "Слабый", "Средний", "Сильный", "Очень сильный"]
             colors = ["red", "orange", "gold", "lightgreen", "green"]
             strength_label.config(text=ratings[strength['score']], foreground=colors[strength['score']])
-
         password_entry.bind('<KeyRelease>', update_strength)
 
         def generate_and_set():
@@ -799,38 +795,31 @@ class MainWindow:
                 password_entry.delete(0, tk.END)
                 password_entry.insert(0, pwd)
                 update_strength()
-
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
-
         ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
         fields['password'] = password_entry
         row += 2
-
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         url_entry = ttk.Entry(form_frame, width=40)
         url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['url'] = url_entry
         row += 1
-
         ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"], width=37,
                                       state="readonly")
         category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['category'] = category_combo
         row += 1
-
         ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['tags'] = tags_entry
         row += 1
-
         ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['notes'] = notes_text
         row += 1
-
         form_frame.grid_columnconfigure(1, weight=1)
 
         def save():
@@ -838,19 +827,58 @@ class MainWindow:
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
+            if not any(c.isalpha() for c in title):
+                messagebox.showerror("Error", "Title must contain at least one letter")
+                return
+
+            # ========== ПРОВЕРКА URL (БЛОКИРУЮЩАЯ) ==========
+            url = fields['url'].get().strip()
+            if url:
+                import re
+                # Простая проверка на валидный URL
+                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
+                if not is_valid_url:
+                    messagebox.showerror("Error", f"'{url}' is not a valid URL!\n\nExample: https://example.com")
+                    return
+              # ================================================
+
+            tags = fields['tags'].get().strip()
+            if tags:
+                allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
+                if not all(c in allowed for c in tags):
+                    messagebox.showerror("Error", "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
+                    return
 
             password = fields['password'].get()
+
+            # ========== ПРОВЕРКА ПАРОЛЯ (БЛОКИРУЮЩАЯ) ==========
             if not password:
                 messagebox.showerror("Error", "Password cannot be empty!")
                 return
+
+            # Оценка силы пароля - запрещаем слабые и очень слабые
+            strength = self.password_generator.estimate_strength(password)
+            if strength['score'] <= 1:  # 0=Very Weak, 1=Weak
+                messagebox.showerror(
+                    "Weak Password",
+                    f"Your password is {strength['rating']}.\n\n"
+                    f"Please use a stronger password with:\n"
+                    f"• At least 12 characters\n"
+                    f"• Uppercase and lowercase letters\n"
+                    f"• Numbers\n"
+                    f"• Special characters (!@#$%^&*)\n\n"
+                    f"Try using the password generator (Ctrl+G)."
+                )
+                return
+            # ==================================================
 
             entry_data = {
                 'title': title,
                 'username': fields['username'].get().strip(),
                 'password': password,
-                'url': fields['url'].get().strip(),
+                'url': url,
                 'category': fields['category'].get(),
-                'tags': fields['tags'].get().strip(),
+                'tags': tags,
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
 
@@ -866,7 +894,6 @@ class MainWindow:
         button_frame.pack(fill=tk.X, pady=10)
         ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
-
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
@@ -1218,6 +1245,30 @@ class MainWindow:
             self.status_label.config(text=f"Copied {data_type} - will clear in {self.clipboard.timeout}s")
         else:
             self.status_label.config(text=f"Failed to copy {data_type}")
+
+
+    def _test_audit(self):
+        """Test audit logging manually"""
+        if not self.audit_logger:
+            messagebox.showwarning("No Audit", "Audit logger not initialized")
+            return
+
+        from Crypts_man.src.core.audit.audit_logger import AuditEventType, AuditSeverity
+
+        seq = self.audit_logger.log_event(
+            event_type="test.manual",
+            severity="INFO",
+            source="test_button",
+            details={'message': 'Manual test entry'},
+            user_id='test_user'
+        )
+
+        messagebox.showinfo("Test", f"Audit entry created with sequence: {seq}")
+
+        # Проверим сколько всего записей
+        entries = self.audit_logger.get_entries(limit=10)
+        messagebox.showinfo("Audit Stats", f"Total entries in log: {len(entries)}")
+
 
 
     def run(self):

@@ -15,36 +15,31 @@ def fuzzy_match(s1: str, s2: str, max_distance: int = 2) -> bool:
     """Проверка на похожесть строк"""
     if not s1 or not s2:
         return False
-
     s1 = s1.lower().strip()
     s2 = s2.lower().strip()
-
     # Точное совпадение
     if s1 == s2:
         return True
-
     # Одна строка содержит другую
     if s1 in s2 or s2 in s1:
         return True
-
     # Проверка по первым буквам и общей длине
     if s1[0] != s2[0] and s2[0] not in s1[:2]:
         return False
-
     # Подсчёт совпадающих символов
     matches = 0
     for ch in s1:
         if ch in s2:
             matches += 1
-
     # Если совпадает больше 70% символов - считаем похожим
     similarity = matches / max(len(s1), len(s2))
-
     return similarity >= 0.7
 
 
 class EntryManager:
     """Main CRUD operations controller for vault entries"""
+
+
     def __init__(self, db_connection, key_manager):
         """
         Initialize entry manager
@@ -55,16 +50,14 @@ class EntryManager:
         """
         self.db = db_connection
         self.key_manager = key_manager
-
         # Initialize encryption service
         encryption_key = key_manager.get_cached_encryption_key()
         if encryption_key is None:
             raise ValueError("Encryption key not available - user must be authenticated")
-
         self.encryption_service = EncryptionService(encryption_key)
-
         # Ensure tables exist
         self._init_tables()
+
 
     def _init_tables(self):
         """Initialize vault tables with proper schema for Sprint 3"""
@@ -83,7 +76,6 @@ class EntryManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-
             # Create deleted_entries table for soft delete
             c.execute("""
                 CREATE TABLE IF NOT EXISTS deleted_entries (
@@ -95,7 +87,6 @@ class EntryManager:
                     expires_at TIMESTAMP
                 )
             """)
-
             # Create indexes for performance
             c.execute("CREATE INDEX IF NOT EXISTS idx_vault_title ON vault_entries(title)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_vault_username ON vault_entries(username)")
@@ -116,7 +107,6 @@ class EntryManager:
         """
         entry_id = str(uuid.uuid4())
         now = datetime.utcnow()
-
         # Prepare payload with metadata
         payload = {
             **data,
@@ -125,17 +115,14 @@ class EntryManager:
             'updated_at': now.isoformat(),
             'version': 2
         }
-
         # Encrypt the entire payload
         encrypted_blob = self.encryption_service.encrypt_entry(payload)
-
         # Extract fields for indexing (not encrypted for search performance)
         title = data.get('title', '')
         username = data.get('username', '')
         url = data.get('url', '')
         tags = data.get('tags', '')
         category = data.get('category', '')
-
         # Store in database
         with self.db.cursor() as c:
             c.execute("""
@@ -143,14 +130,8 @@ class EntryManager:
                 (id, encrypted_data, title, username, url, tags, category, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (entry_id, encrypted_blob, title, username, url, tags, category, now, now))
-
         # Publish event
-        events.publish(EventType.ENTRY_ADDED, {
-            'id': entry_id,
-            'title': title,
-            'action': 'created'
-        })
-
+        events.publish(EventType.ENTRY_ADDED, {'id': entry_id, 'title': title, 'action': 'created'})
         logger.info(f"Entry created: {entry_id}")
         return entry_id
 
@@ -172,7 +153,6 @@ class EntryManager:
                 (entry_id,)
             )
             row = c.fetchone()
-
         if not row and include_deleted:
             # Check deleted entries table
             with self.db.cursor() as c:
@@ -181,10 +161,8 @@ class EntryManager:
                     (entry_id,)
                 )
                 row = c.fetchone()
-
         if not row:
             return None
-
         try:
             encrypted_blob = row[0] if isinstance(row, tuple) else row['encrypted_data']
             decrypted = self.encryption_service.decrypt_entry(encrypted_blob)
@@ -212,7 +190,6 @@ class EntryManager:
             params.append(category)
         query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-
         with self.db.cursor() as c:
             c.execute(query, params)
             rows = c.fetchall()
@@ -238,7 +215,6 @@ class EntryManager:
                 category_val = row[5] if len(row) > 5 else ''
                 tags_val = row[6] if len(row) > 6 else ''
                 updated_at = row[8] if len(row) > 8 else ''
-
             # Базовая структура для таблицы (всегда возвращаем эти поля)
             table_entry = {
                 'id': str(entry_id),  # Гарантируем строку для UUID
@@ -251,7 +227,6 @@ class EntryManager:
                 'password': '',  # По умолчанию скрыт
                 'notes': '',
             }
-
             # Расшифровка только если есть encrypted_data
             if encrypted_blob:
                 try:
@@ -264,7 +239,6 @@ class EntryManager:
                 except Exception as e:
                     logger.warning(f"Decrypt failed for {entry_id}: {e}")
                     table_entry['notes'] = '[Error]'
-
             entries.append(table_entry)
         return entries
 
@@ -284,22 +258,17 @@ class EntryManager:
             # Check if entry exists
             c.execute("SELECT encrypted_data FROM vault_entries WHERE id = ?", (entry_id,))
             row = c.fetchone()
-
             if not row:
                 logger.warning(f"Entry not found for update: {entry_id}")
                 return None
-
             # Get existing entry
             existing_blob = row[0] if isinstance(row, tuple) else row['encrypted_data']
             existing = self.encryption_service.decrypt_entry(existing_blob)
-
             # Merge updates
             updated = {**existing, **data}
             updated['updated_at'] = datetime.utcnow().isoformat()
-
             # Re-encrypt
             encrypted_blob = self.encryption_service.encrypt_entry(updated)
-
             # Update database
             c.execute("""
                 UPDATE vault_entries
@@ -316,16 +285,11 @@ class EntryManager:
                 datetime.utcnow(),
                 entry_id
             ))
-
         # Publish event
-        events.publish(EventType.ENTRY_UPDATED, {
-            'id': entry_id,
-            'title': updated.get('title'),
-            'action': 'updated'
-        })
-
+        events.publish(EventType.ENTRY_UPDATED, {'id': entry_id, 'title': updated.get('title'), 'action': 'updated'})
         logger.info(f"Entry updated: {entry_id}")
         return updated
+
 
     def delete_entry(self, entry_id: str, soft_delete: bool = True) -> bool:
         """
@@ -339,15 +303,12 @@ class EntryManager:
             True if successful
         """
         print(f"DEBUG ENTRY_MANAGER DELETE: id={entry_id}, soft={soft_delete}")
-
         with self.db.transaction() as c:
             # Get entry before deletion
             c.execute("SELECT encrypted_data, title FROM vault_entries WHERE id = ?", (entry_id,))
             row = c.fetchone()
-
             if not row:
                 return False
-
             if soft_delete:
                 # Move to deleted_entries table
                 encrypted_blob = row[0] if isinstance(row, tuple) else row['encrypted_data']
@@ -357,22 +318,15 @@ class EntryManager:
                     INSERT INTO deleted_entries (original_id, encrypted_data, title, expires_at)
                     VALUES (?, ?, ?, ?)
                 """, (entry_id, encrypted_blob, title, expires_at))
-
             # Delete from main table
             c.execute("DELETE FROM vault_entries WHERE id = ?", (entry_id,))
-
             # Delete audit logs (if exists)
             c.execute("DELETE FROM audit_log WHERE entry_id = ?", (entry_id,))
-
         # Publish event
-        events.publish(EventType.ENTRY_DELETED, {
-            'id': entry_id,
-            'action': 'deleted',
-            'soft': soft_delete
-        })
-
+        events.publish(EventType.ENTRY_DELETED, {'id': entry_id, 'action': 'deleted', 'soft': soft_delete})
         logger.info(f"Entry deleted: {entry_id} (soft={soft_delete})")
         return True
+
 
     def restore_entry(self, entry_id: str) -> Optional[str]:
         """
@@ -390,37 +344,33 @@ class EntryManager:
                 (entry_id,)
             )
             row = c.fetchone()
-
         if not row:
             return None
-
         try:
             # Decrypt to verify integrity
             encrypted_blob = row[0] if isinstance(row, tuple) else row['encrypted_data']
             decrypted = self.encryption_service.decrypt_entry(encrypted_blob)
-
             # Remove old ID to create new one
             if 'id' in decrypted:
                 del decrypted['id']
-
             # Create new entry
             new_id = self.create_entry(decrypted)
-
             # Remove from deleted table
             with self.db.cursor() as c:
                 c.execute("DELETE FROM deleted_entries WHERE original_id = ?", (entry_id,))
-
             logger.info(f"Entry restored: {entry_id} -> {new_id}")
             return new_id
         except Exception as e:
             logger.error(f"Failed to restore entry {entry_id}: {e}")
             return None
 
+
     def get_entry_count(self) -> int:
         """Get total number of entries"""
         with self.db.cursor() as c:
             c.execute("SELECT COUNT(*) FROM vault_entries")
             return c.fetchone()[0]
+
 
     def search_entries(self, query: str, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -451,7 +401,6 @@ class EntryManager:
                 query, f"{query}%", limit
             ))
             rows = c.fetchall()
-
         entries = []
         for row in rows:
             try:
@@ -460,12 +409,13 @@ class EntryManager:
                 entries.append(decrypted)
             except Exception:
                 continue
-
         return entries
+
 
     def get_entries_by_category(self, category: str) -> List[Dict[str, Any]]:
         """Get entries filtered by category"""
         return self.get_all_entries(category=category)
+
 
     def get_entries_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Get entries within date range"""
@@ -476,7 +426,6 @@ class EntryManager:
                 ORDER BY updated_at DESC
             """, (start_date.isoformat(), end_date.isoformat()))
             rows = c.fetchall()
-
         entries = []
         for row in rows:
             try:
@@ -485,7 +434,6 @@ class EntryManager:
                 entries.append(decrypted)
             except Exception:
                 continue
-
         return entries
 
 
@@ -501,7 +449,6 @@ class EntryManager:
     def get_all_entries_metadata(self, limit: int = 1000, offset: int = 0,
                                  search: str = None, category: str = None) -> List[Dict[str, Any]]:
         """Get entries with fuzzy search"""
-
         # Без поиска - обычный SQL
         if not search or not search.strip():
             query = """

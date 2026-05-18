@@ -1,12 +1,8 @@
 # Crypts_man/main.py
-# !/usr/bin/env python3
-"""CryptoSafe Manager - Main Entry Point"""
-
+"""CryptoSafe Manager-Main Entry Point"""
 import sys
 import os
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from Crypts_man.src.core.config import Config
 from Crypts_man.src.database.db import Database
 from Crypts_man.src.gui.main_window import MainWindow
@@ -17,10 +13,6 @@ def main():
         print("Starting CryptoSafe Manager (Sprint 5 - Audit Logging)...")
         config = Config()
         db = Database(config.database_path)
-
-        # Migrate database for audit tables if needed
-        # (Database class already creates tables on init)
-
         app = MainWindow(config, db)
         app.run()
     except Exception as e:
