@@ -20,11 +20,14 @@ class EventType(Enum):
     AUDIT_VERIFICATION_COMPLETE = "audit.verification_complete"     #5
     AUDIT_EXPORT_CREATED = "audit.export_created"     #5
 
+
 class EventSystem:
     """Simple event bus for decoupled communication"""
 
+
     def __init__(self):
         self._subscribers: Dict[EventType, List[Callable]] = {}
+
 
     def subscribe(self, event_type: EventType, callback: Callable) -> None:
         """Subscribe to an event"""
@@ -32,17 +35,18 @@ class EventSystem:
             self._subscribers[event_type] = []
         self._subscribers[event_type].append(callback)
 
+
     def publish(self, event_type: EventType, data: Any = None, sync: bool = True) -> None:
         """Publish an event to all subscribers"""
         if event_type not in self._subscribers:
             return
-
         for callback in self._subscribers[event_type]:
             if sync:
                 callback(data)
             else:
                 # For async, we could use threading, but keep simple for Sprint 1
                 callback(data)
+
 
     def unsubscribe(self, event_type: EventType, callback: Callable) -> None:
         """Remove a subscriber"""

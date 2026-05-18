@@ -216,10 +216,11 @@ class AuditLogger:
 
     def _sanitize_details(self, details: Dict[str, Any]) -> Dict[str, Any]:
         """Remove sensitive data from log details"""
-        sensitive_fields = ['password', 'key', 'secret', 'token', 'master_password']
+        sensitive_fields = ['password', 'key', 'secret', 'token', 'master_password', 'pwd', 'pass']
         sanitized = {}
         for key, value in details.items():
-            if any(sensitive in key.lower() for sensitive in sensitive_fields):
+            key_lower = key.lower()
+            if any(sensitive in key_lower for sensitive in sensitive_fields):
                 sanitized[key] = '[REDACTED]'
             elif isinstance(value, dict):
                 sanitized[key] = self._sanitize_details(value)

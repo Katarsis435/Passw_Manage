@@ -18,28 +18,25 @@ logger = logging.getLogger(__name__)
 class Database:
     """Thread-safe database helper with connection pooling and async operations"""
 
+
     def __init__(self, db_path: str, max_connections: int = 5, pool_timeout: int = 30):
         self.db_path = db_path
         self.max_connections = max_connections
         self.pool_timeout = pool_timeout
-
         # Connection pool
         self._connection_pool = queue.Queue(maxsize=max_connections)
         self._active_connections = 0
         self._pool_lock = threading.Lock()
-
         # Thread pool for async operations
         self._executor = ThreadPoolExecutor(max_workers=max_connections, thread_name_prefix="DB_Worker")
-
         # Thread-local storage for connections
         self._local = threading.local()
-
         # Initialize database schema first (without using pool)
         self._init_database_schema()
-
         # Then initialize connection pool
         self._init_connection_pool()
         #self.migrate_to_sprint3()  #ЭТО ВАЖНО
+
 
     def _init_database_schema(self):
         """Initialize database schema using a temporary connection"""
@@ -47,17 +44,14 @@ class Database:
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
-
         # Use a temporary connection for schema initialization
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-
         try:
             # Check current version
             cursor = conn.cursor()
             cursor.execute("PRAGMA user_version")
             version = cursor.fetchone()[0]
-
             if version == 0:
                 # Create tables
                 cursor.execute("""
@@ -74,7 +68,6 @@ class Database:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +79,6 @@ class Database:
                         FOREIGN KEY (entry_id) REFERENCES vault_entries(id) ON DELETE SET NULL
                     )
                 """)
-
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS settings (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,7 +87,6 @@ class Database:
                         encrypted BOOLEAN DEFAULT 0
                     )
                 """)
-
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS key_store (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,7 +98,6 @@ class Database:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-
                 # Create indexes for performance
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_vault_title ON vault_entries(title)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_vault_tags ON vault_entries(tags)")
@@ -116,7 +106,6 @@ class Database:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log(timestamp)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_type ON key_store(key_type)")
-
                 # Create triggers for updated_at
                 cursor.execute("""
                     CREATE TRIGGER IF NOT EXISTS update_vault_entries_timestamp
@@ -126,19 +115,17 @@ class Database:
                         WHERE id = NEW.id;
                     END;
                 """)
-
                 # Set version to 1
                 cursor.execute("PRAGMA user_version = 1")
-
                 conn.commit()
                 logger.info("Database schema initialized successfully")
-
             cursor.close()
         except Exception as e:
             logger.error(f"Error initializing database schema: {e}")
             raise
         finally:
             conn.close()
+
 
     def _init_connection_pool(self):
         """Initialize connection pool with connections"""
@@ -150,7 +137,6 @@ class Database:
             except Exception as e:
                 logger.error(f"Error creating connection {i + 1}: {e}")
 
-    # src/database/db.py (updated schema for Sprint 3)
 
     def migrate_to_sprint3(self):
         """Migrate database schema to Sprint 3 format - SAFE VERSION"""
@@ -158,22 +144,18 @@ class Database:
             # Проверяем текущую схему
             c.execute("PRAGMA table_info(vault_entries)")
             columns = {row[1]: row[2] for row in c.fetchall()}  # {name: type}
-
             # 1. Добавляем encrypted_data, если нет
             if 'encrypted_data' not in columns:
                 c.execute("ALTER TABLE vault_entries ADD COLUMN encrypted_data BLOB")
                 print("✓ Added encrypted_data column")
-
             # 2. Добавляем category/tags, если нет
             if 'category' not in columns:
                 c.execute("ALTER TABLE vault_entries ADD COLUMN category TEXT")
             if 'tags' not in columns:
                 c.execute("ALTER TABLE vault_entries ADD COLUMN tags TEXT")
-
             # 3. ВАЖНО: Если id INTEGER, а нужно TEXT для UUID — миграция данных
             if columns.get('id') == 'INTEGER':
                 self._safe_migrate_id_to_text(c)
-
             # 4. Создаём индексы (без ошибок, если уже есть)
             indexes = [
                 "CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_entries(category)",
@@ -186,7 +168,6 @@ class Database:
                     c.execute(idx_sql)
                 except sqlite3.OperationalError:
                     pass  # Index already exists
-
             # 5. Таблица для soft delete
             c.execute("""
                 CREATE TABLE IF NOT EXISTS deleted_entries (
@@ -199,14 +180,13 @@ class Database:
                 )
             """)
 
+
     def _safe_migrate_id_to_text(self, cursor):
         """Безопасная миграция id INTEGER → TEXT с сохранением данных"""
         print("⚠ Migrating id from INTEGER to TEXT...")
-
         # Проверяем, есть ли данные
         cursor.execute("SELECT COUNT(*) FROM vault_entries")
         count = cursor.fetchone()[0]
-
         if count == 0:
             # Пустая таблица — просто пересоздаём
             cursor.execute("DROP TABLE vault_entries")
@@ -224,7 +204,6 @@ class Database:
                 )
             """)
             return
-
         # Есть данные — создаём временную таблицу
         cursor.execute("""
             CREATE TABLE vault_entries_temp (
@@ -239,7 +218,6 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         # Копируем данные, конвертируя id в TEXT
         cursor.execute("""
             INSERT INTO vault_entries_temp (id, title, username, url, tags, category, created_at, updated_at)
@@ -249,16 +227,15 @@ class Database:
                    COALESCE(updated_at, CURRENT_TIMESTAMP)
             FROM vault_entries
         """)
-
         # Заменяем таблицу
         cursor.execute("DROP TABLE vault_entries")
         cursor.execute("ALTER TABLE vault_entries_temp RENAME TO vault_entries")
         print(f"✓ Migrated {count} entries to TEXT id")
 
+
     def _migrate_id_to_text(self, cursor):
         """Миграция id INTEGER → TEXT с сохранением ВСЕХ колонок"""
         print("⚠ Migrating id from INTEGER to TEXT...")
-
         # Создаём новую таблицу со ВСЕМИ колонками из Sprint 1+2+3
         cursor.execute("""
             CREATE TABLE vault_entries_new (
@@ -274,7 +251,6 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         # Копируем данные (с учётом старых колонок)
         cursor.execute("""
             INSERT INTO vault_entries_new
@@ -291,16 +267,10 @@ class Database:
                 COALESCE(updated_at, CURRENT_TIMESTAMP)
             FROM vault_entries
         """)
-
         # Заменяем таблицу
         cursor.execute("DROP TABLE vault_entries")
         cursor.execute("ALTER TABLE vault_entries_new RENAME TO vault_entries")
         print("✓ Migration completed with all columns")
-
-
-
-
-
 
 
     def _create_connection(self) -> sqlite3.Connection:
@@ -312,14 +282,13 @@ class Database:
             isolation_level=None  # Autocommit mode
         )
         conn.row_factory = sqlite3.Row
-
         # Enable foreign keys and WAL mode for better concurrency
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
-
         return conn
+
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a connection from the pool"""
@@ -605,15 +574,15 @@ class Database:
         for row in rows:
             if isinstance(row, sqlite3.Row):
                 entries.append({
-                  'sequence_number': row['sequence_number'],
-                  'timestamp': row['timestamp'],
-                  'event_type': row['event_type'],
-                  'severity': row['severity'],
-                  'user_id': row['user_id'],
-                  'source': row['source'],
-                  'entry_data': row['entry_data'],
-                  'entry_hash': row['entry_hash'],
-                  'signature': row['signature']
+                    'sequence_number': row['sequence_number'],
+                    'timestamp': row['timestamp'],
+                    'event_type': row['event_type'],
+                    'severity': row['severity'],
+                    'user_id': row['user_id'],
+                    'source': row['source'],
+                    'entry_data': row['entry_data'],
+                    'entry_hash': row['entry_hash'],
+                    'signature': row['signature']
                 })
             else:
                 entries.append({

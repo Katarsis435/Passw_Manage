@@ -1,4 +1,5 @@
 # src/core/crypto/key_derivation.py
+from Crypts_man.src.core.key_manager import KeyManager as MainKeyManager
 from argon2 import PasswordHasher, Type
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -18,12 +19,10 @@ class KeyManager:
         argon2_time = 3
         argon2_memory = 65536  # 64 MiB
         argon2_parallelism = 4
-
         if config:
             argon2_time = config.get('argon2_time', 3)
             argon2_memory = config.get('argon2_memory', 65536)
             argon2_parallelism = config.get('argon2_parallelism', 4)
-
         self.argon2_hasher = PasswordHasher(
             time_cost=argon2_time,
             memory_cost=argon2_memory,
@@ -32,15 +31,14 @@ class KeyManager:
             salt_len=16,
             type=Type.ID
         )
-
         # PBKDF2 parameters for encryption key derivation
         self.pbkdf2_iterations = 100000
         if config:
             self.pbkdf2_iterations = config.get('pbkdf2_iterations', 100000)
-
         self._cached_encryption_key: Optional[bytes] = None
         self._cached_auth_hash: Optional[str] = None
         self._cache_active = False
+
 
     def create_auth_hash(self, password: str) -> Dict[str, Any]:
         """Create Argon2 hash for password verification"""
@@ -55,6 +53,7 @@ class KeyManager:
             }
         }
 
+
     def derive_encryption_key(self, password: str, salt: bytes) -> bytes:
         """Derive AES-256 key from password using PBKDF2"""
         kdf = PBKDF2HMAC(
@@ -65,6 +64,7 @@ class KeyManager:
         )
         return kdf.derive(password.encode('utf-8'))
 
+
     def verify_password(self, password: str, stored_hash: str) -> bool:
         """Verify password against stored Argon2 hash (constant-time)"""
         try:
@@ -74,14 +74,17 @@ class KeyManager:
             secrets.compare_digest(b'dummy', b'dummy')
             return False
 
+
     def cache_encryption_key(self, key: bytes) -> None:
         """Cache encryption key in memory"""
         self._cached_encryption_key = key
         self._cache_active = True
 
+
     def get_cached_encryption_key(self) -> Optional[bytes]:
         """Get cached encryption key if active"""
         return self._cached_encryption_key if self._cache_active else None
+
 
     def clear_cache(self) -> None:
         """Clear cached keys from memory"""
@@ -90,12 +93,14 @@ class KeyManager:
             self._cached_encryption_key = None
         self._cache_active = False
 
+
     def _secure_zero(self, data: bytes) -> None:
         """Securely zero memory"""
         if data:
             import ctypes
             arr = bytearray(data)
             ctypes.memset(id(arr), 0, len(arr))
+
 
     def update_activity(self) -> None:
         """Update activity timestamp (for auto-lock integration)"""
@@ -104,32 +109,27 @@ class KeyManager:
 
 
 
-
-# src/core/crypto/key_derivation.py
-from Crypts_man.src.core.key_manager import KeyManager as MainKeyManager
-
-
 class KeyManagerWrapper:
-  """Wrapper to unify both KeyManager implementations"""
+    """Wrapper to unify both KeyManager implementations"""
 
-  def __init__(self, config=None):
-    self._main = MainKeyManager(config)
+    def __init__(self, config=None):
+        self._main = MainKeyManager(config)
 
-  def get_cached_encryption_key(self):
-    return self._main.get_cached_encryption_key()
+    def get_cached_encryption_key(self):
+        return self._main.get_cached_encryption_key()
 
-  def cache_encryption_key(self, key):
-    return self._main.cache_encryption_key(key)
+    def cache_encryption_key(self, key):
+        return self._main.cache_encryption_key(key)
 
-  def derive_encryption_key(self, password, salt):
-    return self._main.derive_encryption_key(password, salt)
+    def derive_encryption_key(self, password, salt):
+        return self._main.derive_encryption_key(password, salt)
 
-  def verify_password(self, password, stored_hash):
-    return self._main.verify_password(password, stored_hash)
+    def verify_password(self, password, stored_hash):
+        return self._main.verify_password(password, stored_hash)
 
-  def clear_cache(self):
-    return self._main.clear_cache()
+    def clear_cache(self):
+        return self._main.clear_cache()
 
-  def __getattr__(self, name):
-    # Forward any other calls to main KeyManager
-    return getattr(self._main, name)
+    def __getattr__(self, name):
+        # Forward any other calls to main KeyManager
+        return getattr(self._main, name)

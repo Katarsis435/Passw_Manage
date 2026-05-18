@@ -24,6 +24,7 @@ class EncryptionService:
         self.key = encryption_key
         self._aesgcm = AESGCM(self.key)
 
+
     def encrypt_entry(self, data: Dict[str, Any]) -> bytes:
         """
         Encrypt entry data with AES-256-GCM
@@ -39,18 +40,15 @@ class EncryptionService:
             **data,
             'version': 2  # Version for future compatibility
         }
-
         # Convert to JSON and encode
         plaintext = json.dumps(payload, default=str).encode('utf-8')
-
         # Generate unique nonce
         nonce = os.urandom(self.NONCE_LENGTH)
-
         # Encrypt (returns ciphertext with tag appended)
         ciphertext = self._aesgcm.encrypt(nonce, plaintext, None)
-
         # Combine nonce + ciphertext (which includes tag)
         return nonce + ciphertext
+
 
     def decrypt_entry(self, encrypted_blob: bytes) -> Dict[str, Any]:
         """
@@ -67,19 +65,17 @@ class EncryptionService:
         """
         if len(encrypted_blob) < self.NONCE_LENGTH:
             raise ValueError("Invalid encrypted blob")
-
         # Extract nonce
         nonce = encrypted_blob[:self.NONCE_LENGTH]
         ciphertext = encrypted_blob[self.NONCE_LENGTH:]
-
         # Decrypt (automatically verifies tag)
         try:
             plaintext = self._aesgcm.decrypt(nonce, ciphertext, None)
         except Exception as e:
             raise ValueError(f"Decryption failed - possible tampering: {e}")
-
         # Parse JSON
         return json.loads(plaintext.decode('utf-8'))
+
 
     @staticmethod
     def create_empty_entry_template() -> Dict[str, Any]:

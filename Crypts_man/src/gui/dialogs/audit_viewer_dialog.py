@@ -48,31 +48,24 @@ class AuditViewerDialog:
         main_canvas = tk.Canvas(self.dialog)
         main_scrollbar = ttk.Scrollbar(self.dialog, orient="vertical", command=main_canvas.yview)
         scrollable_frame = ttk.Frame(main_canvas)
-
         scrollable_frame.bind("<Configure>", lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
         main_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         main_canvas.configure(yscrollcommand=main_scrollbar.set)
 
         def _on_mousewheel(event):
             main_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
         main_canvas.bind("<MouseWheel>", _on_mousewheel)
         scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-
         main_canvas.pack(side="left", fill="both", expand=True)
         main_scrollbar.pack(side="right", fill="y")
-
         main_frame = ttk.Frame(scrollable_frame, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # ========== FILTER FRAME ==========
+            #FILTER FRAME
         filter_frame = ttk.LabelFrame(main_frame, text="Filters", padding="10")
         filter_frame.pack(fill=tk.X, pady=5)
-
         # Row 1: Event Type + Severity
         row1 = ttk.Frame(filter_frame)
         row1.pack(fill=tk.X, pady=2)
-
         ttk.Label(row1, text="Event Type:").pack(side=tk.LEFT, padx=5)
         self.event_type_var = tk.StringVar(value="All")
         self.event_type_combo = ttk.Combobox(row1, textvariable=self.event_type_var, width=25)
@@ -80,7 +73,6 @@ class AuditViewerDialog:
         self.event_type_combo.set('All')
         self.event_type_combo.bind('<<ComboboxSelected>>', lambda e: self._apply_filters())
         self.event_type_combo.pack(side=tk.LEFT, padx=5)
-
         ttk.Label(row1, text="Severity:").pack(side=tk.LEFT, padx=5)
         self.severity_var = tk.StringVar(value="All")
         self.severity_combo = ttk.Combobox(row1, textvariable=self.severity_var, width=15)
@@ -88,44 +80,34 @@ class AuditViewerDialog:
         self.severity_combo.set('All')
         self.severity_combo.bind('<<ComboboxSelected>>', lambda e: self._apply_filters())
         self.severity_combo.pack(side=tk.LEFT, padx=5)
-
         # Row 2: Date Range
         row2 = ttk.Frame(filter_frame)
         row2.pack(fill=tk.X, pady=2)
-
         ttk.Label(row2, text="Date Range:").pack(side=tk.LEFT, padx=5)
-
         ttk.Button(row2, text="Today", command=lambda: self._set_date_range('today')).pack(side=tk.LEFT, padx=2)
         ttk.Button(row2, text="Last 7 Days", command=lambda: self._set_date_range('week')).pack(side=tk.LEFT, padx=2)
         ttk.Button(row2, text="Last 30 Days", command=lambda: self._set_date_range('month')).pack(side=tk.LEFT, padx=2)
         ttk.Button(row2, text="Clear", command=self._clear_date_range).pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(row2, text="From (YYYY-MM-DD):").pack(side=tk.LEFT, padx=5)
+        ttk.Label(row2, text="From:").pack(side=tk.LEFT, padx=5)
         self.start_date_var = tk.StringVar()
         self.start_date_entry = ttk.Entry(row2, textvariable=self.start_date_var, width=15)
         self.start_date_entry.pack(side=tk.LEFT, padx=2)
         self.start_date_entry.bind('<Return>', lambda e: self._apply_filters())
-
-        ttk.Label(row2, text="To (YYYY-MM-DD):").pack(side=tk.LEFT, padx=5)
+        ttk.Label(row2, text="To:").pack(side=tk.LEFT, padx=5)
         self.end_date_var = tk.StringVar()
         self.end_date_entry = ttk.Entry(row2, textvariable=self.end_date_var, width=15)
         self.end_date_entry.pack(side=tk.LEFT, padx=2)
         self.end_date_entry.bind('<Return>', lambda e: self._apply_filters())
-
         # Row 3: Buttons
         row3 = ttk.Frame(filter_frame)
         row3.pack(fill=tk.X, pady=5)
-
         ttk.Button(row3, text="Apply Filters", command=self._apply_filters).pack(side=tk.LEFT, padx=2)
         ttk.Button(row3, text="Reset", command=self._reset_filters).pack(side=tk.LEFT, padx=2)
-
-        # ========== TABLE FRAME ==========
+            #TABLE FRAME
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
         columns = ('seq', 'timestamp', 'event_type', 'severity', 'user_id', 'source', 'details')
         self.tree = ttk.Treeview(table_frame, columns=columns, show='headings', selectmode='browse', height=15)
-
         self.tree.heading('seq', text='#')
         self.tree.heading('timestamp', text='Timestamp')
         self.tree.heading('event_type', text='Event Type')
@@ -133,7 +115,6 @@ class AuditViewerDialog:
         self.tree.heading('user_id', text='User')
         self.tree.heading('source', text='Source')
         self.tree.heading('details', text='Details')
-
         self.tree.column('seq', width=50, minwidth=50)
         self.tree.column('timestamp', width=180, minwidth=150)
         self.tree.column('event_type', width=200, minwidth=150)
@@ -141,53 +122,39 @@ class AuditViewerDialog:
         self.tree.column('user_id', width=100, minwidth=80)
         self.tree.column('source', width=120, minwidth=100)
         self.tree.column('details', width=400, minwidth=200)
-
         vsb = ttk.Scrollbar(table_frame, orient='vertical', command=self.tree.yview)
         hsb = ttk.Scrollbar(table_frame, orient='horizontal', command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
         self.tree.grid(row=0, column=0, sticky='nsew')
         vsb.grid(row=0, column=1, sticky='ns')
         hsb.grid(row=1, column=0, sticky='ew')
         table_frame.grid_rowconfigure(0, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
-
         self.tree.bind('<<TreeviewSelect>>', self._on_select)
-
-        # ========== DETAILS FRAME ==========
+            #DETAILS FRAME
         details_frame = ttk.LabelFrame(main_frame, text="Entry Details", padding="10")
         details_frame.pack(fill=tk.X, pady=5)
-
         self.details_text = tk.Text(details_frame, height=8, wrap=tk.WORD, state='disabled')
         self.details_text.pack(fill=tk.BOTH, expand=True)
-
         details_scrollbar = ttk.Scrollbar(details_frame, orient='vertical', command=self.details_text.yview)
         self.details_text.configure(yscrollcommand=details_scrollbar.set)
         details_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # ========== STATUS FRAME ==========
+            #STATUS FRAME
         status_frame = ttk.Frame(main_frame)
         status_frame.pack(fill=tk.X, pady=5)
-
         self.status_label = ttk.Label(status_frame, text="")
         self.status_label.pack(side=tk.LEFT)
-
         self.verify_status_label = ttk.Label(status_frame, text="", foreground="green")
         self.verify_status_label.pack(side=tk.RIGHT)
-
-        # ========== PAGINATION FRAME ==========
+            #PAGINATION FRAME
         page_frame = ttk.Frame(main_frame)
         page_frame.pack(fill=tk.X, pady=5)
-
         ttk.Button(page_frame, text="<<", command=self._first_page).pack(side=tk.LEFT, padx=2)
         ttk.Button(page_frame, text="<", command=self._prev_page).pack(side=tk.LEFT, padx=2)
-
         self.page_label = ttk.Label(page_frame, text="Page 0 / 0")
         self.page_label.pack(side=tk.LEFT, padx=10)
-
         ttk.Button(page_frame, text=">", command=self._next_page).pack(side=tk.LEFT, padx=2)
         ttk.Button(page_frame, text=">>", command=self._last_page).pack(side=tk.LEFT, padx=2)
-
         ttk.Button(page_frame, text="Refresh", command=self._load_entries).pack(side=tk.RIGHT, padx=2)
         ttk.Button(page_frame, text="Export", command=self._export).pack(side=tk.RIGHT, padx=2)
         ttk.Button(page_frame, text="Verify Integrity", command=self._verify_integrity).pack(side=tk.RIGHT, padx=2)

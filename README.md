@@ -105,8 +105,7 @@ source venv/bin/activate
 # Ставим зависимости
 pip install -r requirements.txt
 
-# Для Sprint 4 (рекомендуется):
-# Windows:
+# Windows (рекомендуется):
 pip install pywin32
 # macOS:
 pip install pyobjc
