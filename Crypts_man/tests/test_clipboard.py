@@ -87,45 +87,35 @@ class TestClipboardSecurity(unittest.TestCase):
     def test_memory_security_with_win32(self):
         """TEST-3: Verify password using Win32 API memory dump"""
         print("\nTEST-3: Memory security (Win32 API)")
-
         import ctypes
         from ctypes import wintypes
-
         test_password = "MEMORY_SECRET_XYZ_123!@#"
         print(f"  Test password: {test_password}")
-
         # Step 1: Copy password to clipboard
         print("  Step 1: Copying password to clipboard...")
         self.service.copy_to_clipboard(test_password, "password", "test_id")
         time.sleep(0.5)
-
         # Step 2: Get process ID using Win32 API
         print("  Step 2: Getting process ID via Win32 API...")
         kernel32 = ctypes.windll.kernel32
         current_pid = kernel32.GetCurrentProcessId()
         print(f"  Current PID: {current_pid}")
-
         # Step 3: Open process using Win32 API
         print("  Step 3: Opening process handle via Win32 OpenProcess...")
         PROCESS_ALL_ACCESS = 0x1F0FFF
         hProcess = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, current_pid)
-
         if not hProcess:
             print("  Could not open process (need admin rights)")
             self.skipTest("Need administrator rights")
             return
         print(f"  Process handle: {hProcess}")
-
         # Step 4: Create memory dump using Win32 dbghelp.dll
         print("  Step 4: Creating memory dump via Win32 dbghelp MiniDumpWriteDump...")
         dbghelp = ctypes.windll.dbghelp
-
         dump_path = os.path.join(tempfile.gettempdir(), f"cryptosafe_{current_pid}.dmp")
-
         GENERIC_WRITE = 0x40000000
         CREATE_ALWAYS = 2
         FILE_ATTRIBUTE_NORMAL = 0x80
-
         hFile = kernel32.CreateFileW(
             dump_path,
             GENERIC_WRITE,
@@ -134,7 +124,6 @@ class TestClipboardSecurity(unittest.TestCase):
             FILE_ATTRIBUTE_NORMAL,
             None
         )
-
         if hFile:
             MINIDUMP_TYPE = 0x00000002  # MiniDumpWithPrivateReadWriteMemory
             result = dbghelp.MiniDumpWriteDump(
@@ -149,19 +138,15 @@ class TestClipboardSecurity(unittest.TestCase):
             kernel32.CloseHandle(hProcess)
             self.skipTest("Could not create dump file")
             return
-
         # Step 5: Close process handle
         kernel32.CloseHandle(hProcess)
-
         # Step 6: Check if dump was created
         if os.path.exists(dump_path):
             print(f"  Dump created: {dump_path}")
             print(f"  Dump size: {os.path.getsize(dump_path) / 1024:.2f} KB")
-
             # Step 7: Search for password in dump using Win32 ReadFile
             print("  Step 7: Searching dump for password...")
             password_found = False
-
             # Open file with Win32 CreateFile
             hFileRead = kernel32.CreateFileW(
                 dump_path,
@@ -170,12 +155,10 @@ class TestClipboardSecurity(unittest.TestCase):
                 3,  # OPEN_EXISTING
                 0x80, None
             )
-
             if hFileRead:
                 search_bytes = test_password.encode('utf-8')
                 buffer = ctypes.create_string_buffer(1024 * 1024)
                 bytes_read = wintypes.DWORD()
-
                 while True:
                     result = kernel32.ReadFile(
                         hFileRead, buffer, len(buffer),
@@ -183,20 +166,16 @@ class TestClipboardSecurity(unittest.TestCase):
                     )
                     if not result or bytes_read.value == 0:
                         break
-
                     data = buffer.raw[:bytes_read.value]
                     if search_bytes in data:
                         password_found = True
                         break
-
                 kernel32.CloseHandle(hFileRead)
-
             os.remove(dump_path)
         else:
             print("  Dump file not created")
             self.skipTest("Dump creation failed")
             return
-
         # Step 8: Results
         print("\n" + "-" * 40)
         if password_found:
@@ -206,7 +185,6 @@ class TestClipboardSecurity(unittest.TestCase):
         else:
             print("   Password NOT found in memory dump")
         print("-" * 40)
-
         print("  Win32 API used: GetCurrentProcessId, OpenProcess, CreateFileW, MiniDumpWriteDump, ReadFile, CloseHandle")
         self.assertTrue(True)
 

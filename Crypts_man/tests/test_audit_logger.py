@@ -81,9 +81,8 @@ class TestAuditLogger(unittest.TestCase):
     def test_performance_test(self):
         """TEST-2: Generate 10,000 events, measure performance"""
         print("\n TEST-2: Performance test")
-        # Measure logging throughput
         start = time.time()
-        for i in range(1000):  # 1000 entries for performance (10,000 takes too long)
+        for i in range(10000):
             self.logger.log_event(
                 event_type="test.perf",
                 severity=AuditSeverity.INFO.value,
@@ -92,23 +91,21 @@ class TestAuditLogger(unittest.TestCase):
                 user_id="test_user"
             )
         elapsed = time.time() - start
-        avg_time = (elapsed / 1000) * 1000  # ms per entry
-        print(f"  Logging 1000 entries: {elapsed:.2f}s avg={avg_time:.2f}ms")
-        self.assertLess(avg_time, 10)  # < 10ms per entry (PERF-1)
-        # Measure verification time for 1000 entries
+        avg_time = (elapsed / 10000) * 1000
+        print(f"  Logging 10000 entries: {elapsed:.2f}s avg={avg_time:.2f}ms")
+        self.assertLess(avg_time, 10)
         verifier = LogVerifier(self.db, self.signer)
         start = time.time()
         result = verifier.verify_full()
         elapsed = time.time() - start
         print(f"  Verification of {result.total_entries} entries: {elapsed:.2f}s")
-        self.assertLess(elapsed, 1.0)  # < 1 second for 1000 entries (PERF-2)
+        self.assertLess(elapsed, 10.0)
 
 
     # TEST-3: Export/import test
     def test_export_import_test(self):
         """TEST-3: Export to signed JSON and verify with independent verifier"""
         print("\n TEST-3: Export/import test")
-        # Create test entries
         for i in range(50):
             self.logger.log_event(
                 event_type=f"test.export.{i}",
@@ -117,7 +114,6 @@ class TestAuditLogger(unittest.TestCase):
                 details={'data': f'content_{i}'},
                 user_id="test_user"
             )
-        # Export to signed JSON
         from Crypts_man.src.core.audit.log_formatters import LogFormatter
         entries = self.logger.get_entries(limit=100)
         public_key = self.signer.get_public_key() or ''
@@ -126,11 +122,9 @@ class TestAuditLogger(unittest.TestCase):
         self.assertIsNotNone(export_data)
         self.assertIn('export_timestamp', export_data)
         print(f"  ✓ Export created: {len(export_data)} chars")
-        # Parse and verify structure
         parsed = json.loads(export_data)
         self.assertIn('entries', parsed)
-        # Исправлено: 51 = 50 наших + 1 genesis
-        self.assertEqual(len(parsed['entries']), 51)  # 50 + genesis entry
+        self.assertEqual(len(parsed['entries']), 51)  # 50+genesis entry
         print(f"  ✓ Export contains {len(parsed['entries'])} entries (including genesis)")
 
 
@@ -138,7 +132,6 @@ class TestAuditLogger(unittest.TestCase):
     def test_failure_recovery_test(self):
         """TEST-4: Simulate database corruption, verify graceful degradation"""
         print("\n TEST-4: Failure recovery test")
-        # Create entries
         for i in range(100):
             self.logger.log_event(
                 event_type="test.recovery",
@@ -147,10 +140,8 @@ class TestAuditLogger(unittest.TestCase):
                 details={'i': i},
                 user_id="test_user"
             )
-        # Simulate corruption by deleting a row
         with self.db.cursor() as c:
             c.execute("DELETE FROM audit_log WHERE sequence_number = 50")
-        # Try to verify - should detect but not crash
         verifier = LogVerifier(self.db, self.signer)
         try:
             result = verifier.verify_full()
@@ -159,7 +150,6 @@ class TestAuditLogger(unittest.TestCase):
             print(f"  ✓ Corruption detected: {len(result.chain_breaks)} chain breaks")
         except Exception as e:
             self.fail(f"Verification crashed: {e}")
-        # Try to log new entry - should work
         try:
             self.logger.log_event(
                 event_type="test.after.corruption",
@@ -177,7 +167,6 @@ class TestAuditLogger(unittest.TestCase):
     def test_security_test(self):
         """TEST-5: Attempt SQL injection, verify it's blocked"""
         print("\n TEST-5: Security test")
-        # Attempt SQL injection through event_type
         malicious_inputs = [
             "'; DROP TABLE audit_log; --",
             "1' OR '1'='1",
@@ -196,13 +185,11 @@ class TestAuditLogger(unittest.TestCase):
                 print(f"  ✓ SQL injection attempt '{malicious[:20]}' was safely logged")
             except Exception as e:
                 print(f"  ⚠ Input caused error but didn't break: {e}")
-        # Verify no damage was done
         with self.db.cursor() as c:
             c.execute("SELECT COUNT(*) FROM audit_log")
             count = c.fetchone()[0]
             self.assertGreater(count, 0)
             print(f"  ✓ Database intact: {count} entries")
-        # Test sensitive data redaction
         self.logger.log_event(
             event_type="test.redaction",
             severity=AuditSeverity.INFO.value,
@@ -215,16 +202,14 @@ class TestAuditLogger(unittest.TestCase):
             },
             user_id="test_user"
         )
-        # Check that password and key are redacted
         entries = self.logger.get_entries(event_type="test.redaction", limit=1)
         for entry in entries:
             details = entry.get('entry_data', {})
             if isinstance(details, str):
                 details = json.loads(details)
-            # Исправлено: проверяем что НЕ равно оригиналу (может быть None или [REDACTED])
             password_value = details.get('password')
             key_value = details.get('key')
-            # Пароль должен быть скрыт (либо [REDACTED], либо None, либо отсутствует)
+            #ппроль должен бть скрыт (либ[REDACTED], либо None, либ отсутствует)
             self.assertNotEqual(password_value, 'my_secret_password_123',
                                 "Password was not redacted!")
             self.assertNotEqual(key_value, 'encryption_key_xyz',

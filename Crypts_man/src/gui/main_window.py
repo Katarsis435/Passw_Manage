@@ -738,6 +738,11 @@ class MainWindow:
         dialog.geometry("550x650")
         dialog.transient(self.root)
         dialog.grab_set()
+        # Привязка клавиш для диалога
+        dialog.bind('<Control-n>', lambda e: None)  # Блокируем создание нового окна
+        dialog.bind('<Control-e>', lambda e: None)  # Блокируем редактирование
+        dialog.bind('<Return>', lambda e: save())  # Enter = Save
+        dialog.bind('<Escape>', lambda e: dialog.destroy())  # Escape = Cancel
         canvas = tk.Canvas(dialog)
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
@@ -830,8 +835,7 @@ class MainWindow:
             if not any(c.isalpha() for c in title):
                 messagebox.showerror("Error", "Title must contain at least one letter")
                 return
-
-            # ========== ПРОВЕРКА URL (БЛОКИРУЮЩАЯ) ==========
+            # ПРОВЕРКА URL (БЛОКИРУЮЩАЯ)
             url = fields['url'].get().strip()
             if url:
                 import re
@@ -840,22 +844,17 @@ class MainWindow:
                 if not is_valid_url:
                     messagebox.showerror("Error", f"'{url}' is not a valid URL!\n\nExample: https://example.com")
                     return
-              # ================================================
-
             tags = fields['tags'].get().strip()
             if tags:
                 allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789, -_#')
                 if not all(c in allowed for c in tags):
                     messagebox.showerror("Error", "Tags can only contain letters, numbers, commas, spaces, hyphens and #")
                     return
-
             password = fields['password'].get()
-
-            # ========== ПРОВЕРКА ПАРОЛЯ (БЛОКИРУЮЩАЯ) ==========
+            #ПРОВЕРКА ПАРОЛЯ (БЛОКИРУЮЩАЯ)
             if not password:
                 messagebox.showerror("Error", "Password cannot be empty!")
                 return
-
             # Оценка силы пароля - запрещаем слабые и очень слабые
             strength = self.password_generator.estimate_strength(password)
             if strength['score'] <= 1:  # 0=Very Weak, 1=Weak
@@ -870,8 +869,6 @@ class MainWindow:
                     f"Try using the password generator (Ctrl+G)."
                 )
                 return
-            # ==================================================
-
             entry_data = {
                 'title': title,
                 'username': fields['username'].get().strip(),
@@ -881,7 +878,6 @@ class MainWindow:
                 'tags': tags,
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
-
             try:
                 self.entry_manager.create_entry(entry_data)
                 dialog.destroy()
@@ -889,7 +885,6 @@ class MainWindow:
                 self.status_label.config(text=f"Entry added: {title}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save entry: {e}")
-
         button_frame = ttk.Frame(scrollable_frame)
         button_frame.pack(fill=tk.X, pady=10)
         ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
@@ -898,17 +893,20 @@ class MainWindow:
         scrollbar.pack(side="right", fill="y")
 
 
+
+
+
+
+
     def _edit_entry(self):
         """Edit selected entry"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         selected = self.table.get_selected_row()
         if not selected:
             messagebox.showinfo("Info", "Please select an entry to edit")
             return
-
         entry_id = selected.get('id')
         try:
             entry = self.entry_manager.get_entry(entry_id)
@@ -918,46 +916,42 @@ class MainWindow:
         if not entry:
             messagebox.showerror("Error", "Entry not found")
             return
-
         dialog = tk.Toplevel(self.root)
         dialog.title("Edit Entry")
         dialog.geometry("550x650")
         dialog.transient(self.root)
         dialog.grab_set()
-
+        # Привязка клавиш для диалога
+        dialog.bind('<Return>', lambda e: save())
+        dialog.bind('<Escape>', lambda e: dialog.destroy())
         canvas = tk.Canvas(dialog)
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-
         form_frame = ttk.Frame(scrollable_frame, padding="10")
         form_frame.pack(fill=tk.BOTH, expand=True)
         fields = {}
         row = 0
-
         ttk.Label(form_frame, text="Title*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.insert(0, entry.get('title', ''))
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
         row += 1
-
         ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.insert(0, entry.get('username', ''))
         username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['username'] = username_entry
         row += 1
-
         ttk.Label(form_frame, text="Password: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
         password_entry.insert(0, entry.get('password', ''))
         password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
         show_password_var = tk.BooleanVar(value=False)
 
         def toggle_password():
@@ -966,7 +960,6 @@ class MainWindow:
         eye_btn = ttk.Button(pwd_frame, text="👁", width=3,
                              command=lambda: [show_password_var.set(not show_password_var.get()), toggle_password()])
         eye_btn.pack(side=tk.RIGHT, padx=(2, 0))
-
         strength_label = ttk.Label(form_frame, text="")
         strength_label.grid(row=row + 1, column=1, sticky=tk.W, padx=5, pady=2)
 
@@ -983,24 +976,21 @@ class MainWindow:
         password_entry.bind('<KeyRelease>', update_strength)
 
         def generate_and_set():
+
             def set_password(pwd):
                 password_entry.delete(0, tk.END)
                 password_entry.insert(0, pwd)
                 update_strength()
-
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
-
         ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(2, 0))
         fields['password'] = password_entry
         row += 1
-
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         url_entry = ttk.Entry(form_frame, width=40)
         url_entry.insert(0, entry.get('url', ''))
         url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['url'] = url_entry
         row += 1
-
         ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"],
                                       width=37, state="readonly")
@@ -1008,21 +998,18 @@ class MainWindow:
         category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['category'] = category_combo
         row += 1
-
         ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.insert(0, entry.get('tags', ''))
         tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['tags'] = tags_entry
         row += 1
-
         ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.insert(1.0, entry.get('notes', ''))
         notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['notes'] = notes_text
         row += 1
-
         form_frame.grid_columnconfigure(1, weight=1)
 
         def save():
@@ -1030,17 +1017,41 @@ class MainWindow:
             if not title:
                 messagebox.showerror("Error", "Title is required")
                 return
-
+            #  ПРОВЕРКА URL ДЛЯ EDIT
+            url = fields['url'].get().strip()
+            if url:
+                is_valid_url = ('.' in url or '://' in url or url.startswith('localhost'))
+                if not is_valid_url:
+                    messagebox.showerror("Error", f"'{url}' is not a valid URL!\n\nExample: https://example.com")
+                    return
+            # ПРОВЕРКА ПАРОЛЯ ДЛЯ EDIT
+            password = fields['password'].get()
+            if not password:
+                messagebox.showerror("Error", "Password cannot be empty!")
+                return
+            # Оценка силы пароля - запрещаем слабые и очень слабые
+            strength = self.password_generator.estimate_strength(password)
+            if strength['score'] <= 1:  # 0=Very Weak, 1=Weak
+                messagebox.showerror(
+                    "Weak Password",
+                    f"Your password is {strength['rating']}.\n\n"
+                    f"Please use a stronger password with:\n"
+                    f"• At least 12 characters\n"
+                    f"• Uppercase and lowercase letters\n"
+                    f"• Numbers\n"
+                    f"• Special characters (!@#$%^&*)\n\n"
+                    f"Try using the password generator."
+                )
+                return
             updated_data = {
                 'title': title,
                 'username': fields['username'].get().strip(),
-                'password': fields['password'].get(),
+                'password': password,
                 'url': fields['url'].get().strip(),
                 'category': fields['category'].get(),
                 'tags': fields['tags'].get().strip(),
                 'notes': fields['notes'].get(1.0, tk.END).strip()
             }
-
             try:
                 result = self.entry_manager.update_entry(entry_id, updated_data)
                 if result:
@@ -1051,12 +1062,10 @@ class MainWindow:
                     messagebox.showerror("Error", "Failed to update entry")
             except Exception as e:
                 messagebox.showerror("Error", f"Update failed: {e}")
-
         button_frame = ttk.Frame(scrollable_frame)
         button_frame.pack(fill=tk.X, pady=10)
         ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
-
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
@@ -1066,12 +1075,10 @@ class MainWindow:
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         selected_rows = self.table.get_selected_rows()
         if not selected_rows:
             messagebox.showinfo("Info", "Please select an entry to delete")
             return
-
         count = len(selected_rows)
         msg = f"Are you sure you want to delete {count} entry{'s' if count > 1 else ''}?"
         if not messagebox.askyesno("Confirm Delete", msg):
