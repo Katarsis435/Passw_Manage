@@ -119,6 +119,8 @@ class Database:
                 cursor.execute("PRAGMA user_version = 1")
                 conn.commit()
                 logger.info("Database schema initialized successfully")
+            self._ensure_sprint6_tables(conn)
+            conn.commit()
             cursor.close()
         except Exception as e:
             logger.error(f"Error initializing database schema: {e}")
@@ -126,6 +128,46 @@ class Database:
         finally:
             conn.close()
 
+
+    @staticmethod
+    def _ensure_sprint6_tables(conn: sqlite3.Connection) -> None:
+        """Create Sprint 6 import/export and sharing tables if missing."""
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS shared_entries (
+                shared_id TEXT PRIMARY KEY,
+                original_entry_id TEXT,
+                encryption_method TEXT NOT NULL,
+                recipient_info TEXT,
+                permissions TEXT,
+                shared_at TIMESTAMP,
+                expires_at TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS import_export_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation_type TEXT NOT NULL,
+                data_format TEXT,
+                encryption_used TEXT,
+                entry_count INTEGER DEFAULT 0,
+                file_size INTEGER DEFAULT 0,
+                checksum TEXT,
+                verification_status TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contact_name TEXT NOT NULL,
+                contact_identifier TEXT,
+                public_key TEXT NOT NULL,
+                fingerprint TEXT,
+                last_used_at TIMESTAMP
+            )
+        """)
+        conn.commit()
 
     def _init_connection_pool(self):
         """Initialize connection pool with connections"""
@@ -826,6 +868,53 @@ class Database:
             except:
                 pass
             delattr(self._local, 'connection')
+
+
+    def insert_shared_entry(self, share_id: str, original_entry_id: str,
+                            encryption_method: str, recipient_info: str,
+                            permissions: str, shared_at: str, expires_at: str) -> None:
+        """Insert shared entry record"""
+        with self.cursor() as c:
+            c.execute("""
+                INSERT INTO shared_entries
+                (shared_id, original_entry_id, encryption_method, recipient_info,
+                 permissions, shared_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (share_id, original_entry_id, encryption_method, recipient_info,
+                  permissions, shared_at, expires_at))
+
+    def insert_import_export_history(self, operation_type: str, data_format: str,
+                                      encryption_used: str, entry_count: int,
+                                      file_size: int, checksum: str,
+                                      verification_status: str, created_at: str) -> None:
+        """Insert import/export history record"""
+        with self.cursor() as c:
+            c.execute("""
+                INSERT INTO import_export_history
+                (operation_type, data_format, encryption_used, entry_count,
+                 file_size, checksum, verification_status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (operation_type, data_format, encryption_used, entry_count,
+                  file_size, checksum, verification_status, created_at))
+
+    def add_contact(self, contact_name: str, contact_identifier: str,
+                    public_key: str, fingerprint: str, last_used_at: str = None) -> None:
+        """Add contact"""
+        with self.cursor() as c:
+            c.execute("""
+                INSERT INTO contacts
+                (contact_name, contact_identifier, public_key, fingerprint, last_used_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (contact_name, contact_identifier, public_key, fingerprint, last_used_at))
+
+    def list_contacts(self) -> list[dict[str, Any]]:
+        """List all contacts"""
+        with self.cursor() as c:
+            c.execute("""
+                SELECT id, contact_name, contact_identifier, public_key, fingerprint, last_used_at
+                FROM contacts ORDER BY contact_name ASC
+            """)
+            return [dict(row) for row in c.fetchall()]
 
     def __enter__(self):
         return self

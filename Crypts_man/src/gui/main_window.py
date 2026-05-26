@@ -4,6 +4,9 @@ import os
 from datetime import datetime
 from tkinter import ttk, messagebox
 
+
+from Crypts_man.src.core.authentication import AuthenticationManager
+from Crypts_man.src.core.key_manager import KeyManager
 from Crypts_man.src.core.events import events, EventType
 from Crypts_man.src.core.vault.password_generator import PasswordGenerator
 from Crypts_man.src.gui.dialogs.password_generator_dialog import PasswordGeneratorDialog
@@ -88,6 +91,15 @@ class MainWindow:
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
+        # Tools menu (Sprint 6)
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Export Vault...", command=self._show_export_dialog)
+        tools_menu.add_command(label="Import Vault...", command=self._show_import_dialog)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="Share Entry...", command=self._show_share_dialog)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="Contacts...", command=self._show_contacts_dialog)
         security_menu.add_separator()
         security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
         # Toolbar
@@ -1211,6 +1223,74 @@ class MainWindow:
 
         © 2026 CryptoSafe Single"""
         messagebox.showinfo("About", about_text)
+
+
+    def _show_export_dialog(self):
+        """Show export dialog"""
+        if not self._vault_ready or not self.entry_manager:
+            messagebox.showwarning("Locked", "Please unlock the vault first")
+            return
+
+        try:
+            from src.core.import_export import VaultExporter, ExportOptions
+            from src.gui.dialogs.import_export_dialogs import ExportDialog
+
+            exporter = VaultExporter(self.entry_manager, self.auth_manager, self.audit_logger)
+            ExportDialog(self.root, self.db, self.auth_manager, self.entry_manager, exporter)
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open export dialog: {e}")
+
+    def _show_import_dialog(self):
+        """Show import dialog"""
+        if not self._vault_ready or not self.entry_manager:
+            messagebox.showwarning("Locked", "Please unlock the vault first")
+            return
+
+        try:
+            from src.core.import_export import VaultImporter, ImportOptions
+            from src.gui.dialogs.import_export_dialogs import ImportDialog
+
+            importer = VaultImporter(self.entry_manager, self.audit_logger)
+            ImportDialog(self.root, self.db, self.auth_manager, importer)
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open import dialog: {e}")
+
+    def _show_share_dialog(self):
+        """Show share dialog for selected entry"""
+        if not self._vault_ready or not self.entry_manager:
+            messagebox.showwarning("Locked", "Please unlock the vault first")
+            return
+
+        selected = self.table.get_selected_row()
+        if not selected:
+            messagebox.showinfo("Info", "Please select an entry to share")
+            return
+
+        try:
+            from src.core.import_export import SharingService, KeyExchangeService, QRCodeService
+            from src.gui.dialogs.import_export_dialogs import ShareDialog
+
+            sharing_service = SharingService(self.db, self.entry_manager, self.audit_logger)
+            key_exchange = KeyExchangeService()
+            qr_service = QRCodeService()
+
+            ShareDialog(self.root, self.db, self.entry_manager, sharing_service,
+                       key_exchange, qr_service, str(selected.get('id')))
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open share dialog: {e}")
+
+    def _show_contacts_dialog(self):
+        """Show contacts dialog"""
+        try:
+            from src.core.import_export import KeyExchangeService
+            from src.gui.dialogs.import_export_dialogs import ContactsDialog
+
+            key_exchange = KeyExchangeService()
+            ContactsDialog(self.root, self.db, key_exchange)
+        except ImportError as e:
+            messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
+
+
 
 
     def _quit(self):

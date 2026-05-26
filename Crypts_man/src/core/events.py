@@ -19,6 +19,9 @@ class EventType(Enum):
     AUDIT_TAMPER_DETECTED = "audit.tamper_detected"     #5
     AUDIT_VERIFICATION_COMPLETE = "audit.verification_complete"     #5
     AUDIT_EXPORT_CREATED = "audit.export_created"     #5
+    VAULT_EXPORT = "vault.export"           #6
+    VAULT_IMPORT = "vault.import"            #6
+    ENTRY_SHARED = "entry.shared"           #6
 
 
 class EventSystem:
