@@ -14,7 +14,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from src.core.import_export.formats import CSVFormat, BitwardenJSONFormat, LastPassCSVExportFormat
+from Crypts_man.src.core.import_export.formats.csv_format import CSVFormat, LastPassCSVExportFormat
+from Crypts_man.src.core.import_export.formats.json_format import BitwardenJSONFormat
 
 
 class ExportOptions:

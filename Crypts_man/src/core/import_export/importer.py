@@ -14,8 +14,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from src.core.import_export.formats import CSVFormat, BitwardenJSONFormat, LastPassCSVFormat
-
+from Crypts_man.src.core.import_export.formats.csv_format import CSVFormat, LastPassCSVFormat
+from Crypts_man.src.core.import_export.formats.json_format import BitwardenJSONFormat
 
 class ImportOptions:
     def __init__(self, mode: str = "merge", dry_run: bool = False,
@@ -161,6 +161,7 @@ class VaultImporter:
     def _decrypt_native_package(self, raw: bytes, password: str | None, private_key_pem: bytes | None) -> bytes:
         print(f"=== DECRYPT DEBUG ===")
         print(f"Password provided: {password is not None}")
+        print(f"Password value: '{password}'")
         print(f"Private key provided: {private_key_pem is not None}")
 
         package = json.loads(raw.decode("utf-8"))

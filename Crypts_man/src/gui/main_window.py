@@ -505,10 +505,8 @@ class MainWindow:
         from Crypts_man.src.core.vault.entry_manager import EntryManager
         print("=== _init_vault_components called ===")
         if not hasattr(self, 'key_manager') or self.key_manager is None:
-            from Crypts_man.src.core.key_manager import KeyManager
             self.key_manager = KeyManager(self.config)
         if not hasattr(self, 'auth_manager') or self.auth_manager is None:
-            from Crypts_man.src.core.authentication import AuthenticationManager
             self.auth_manager = AuthenticationManager(self.key_manager)
         encryption_key = self.key_manager.get_cached_encryption_key()
         if not encryption_key:
@@ -905,11 +903,6 @@ class MainWindow:
         scrollbar.pack(side="right", fill="y")
 
 
-
-
-
-
-
     def _edit_entry(self):
         """Edit selected entry"""
         if not self._vault_ready or not self.entry_manager:
@@ -1226,37 +1219,40 @@ class MainWindow:
 
 
     def _show_export_dialog(self):
-        """Show export dialog"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
 
         try:
-            from src.core.import_export import VaultExporter, ExportOptions
-            from src.gui.dialogs.import_export_dialogs import ExportDialog
+            from Crypts_man.src.core.import_export.exporter import VaultExporter, ExportOptions
+            from Crypts_man.src.gui.dialogs.import_export_dialogs import ExportDialog
 
             exporter = VaultExporter(self.entry_manager, self.auth_manager, self.audit_logger)
             ExportDialog(self.root, self.db, self.auth_manager, self.entry_manager, exporter)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open export dialog: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def _show_import_dialog(self):
-        """Show import dialog"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
 
         try:
-            from src.core.import_export import VaultImporter, ImportOptions
-            from src.gui.dialogs.import_export_dialogs import ImportDialog
+            from Crypts_man.src.core.import_export.importer import VaultImporter, ImportOptions
+            from Crypts_man.src.gui.dialogs.import_export_dialogs import ImportDialog
 
             importer = VaultImporter(self.entry_manager, self.audit_logger)
             ImportDialog(self.root, self.db, self.auth_manager, importer)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open import dialog: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def _show_share_dialog(self):
-        """Show share dialog for selected entry"""
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
@@ -1267,30 +1263,42 @@ class MainWindow:
             return
 
         try:
-            from src.core.import_export import SharingService, KeyExchangeService, QRCodeService
-            from src.gui.dialogs.import_export_dialogs import ShareDialog
+            from Crypts_man.src.core.import_export.sharing_service import SharingService, ShareOptions
+            from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService, QRCodeService
+            from Crypts_man.src.gui.dialogs.import_export_dialogs import ShareDialog
 
             sharing_service = SharingService(self.db, self.entry_manager, self.audit_logger)
             key_exchange = KeyExchangeService()
             qr_service = QRCodeService()
 
             ShareDialog(self.root, self.db, self.entry_manager, sharing_service,
-                       key_exchange, qr_service, str(selected.get('id')))
+                        key_exchange, qr_service, str(selected.get('id')))
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open share dialog: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def _show_contacts_dialog(self):
-        """Show contacts dialog"""
         try:
-            from src.core.import_export import KeyExchangeService
-            from src.gui.dialogs.import_export_dialogs import ContactsDialog
+            from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService
+            from Crypts_man.src.gui.dialogs.import_export_dialogs import ContactsDialog
 
             key_exchange = KeyExchangeService()
             ContactsDialog(self.root, self.db, key_exchange)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
+            import traceback
+            traceback.print_exc()
+            """Show contacts dialog"""
+            try:
+                from src.core.import_export import KeyExchangeService
+                from src.gui.dialogs.import_export_dialogs import ContactsDialog
 
-
+                key_exchange = KeyExchangeService()
+                ContactsDialog(self.root, self.db, key_exchange)
+            except ImportError as e:
+                messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
 
 
     def _quit(self):

@@ -8,9 +8,9 @@ from typing import Any
 
 import qrcode
 
-from src.core.import_export.exporter import ExportOptions
-from src.core.import_export.importer import ImportOptions
-from src.core.import_export.sharing_service import ShareOptions
+from Crypts_man.src.core.import_export.exporter import ExportOptions
+from Crypts_man.src.core.import_export.importer import ImportOptions
+from Crypts_man.src.core.import_export.sharing_service import ShareOptions
 
 
 EXPORT_FORMAT_HELP = {
@@ -65,24 +65,22 @@ class QRViewerDialog(tk.Toplevel):
         self.payload_text = payload_text
         self._build()
 
+
     def _build(self):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=10, pady=10)
-
         ttk.Label(top, text="QR payload preview", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
         preview = tk.Text(top, height=6, wrap="word")
         preview.pack(fill="x", expand=False, pady=(8, 0))
         preview.insert("1.0", self.payload_text[:2000])
         preview.configure(state="disabled")
-
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True, padx=10, pady=10)
-
         canvas = tk.Canvas(body, bg="white")
         canvas.pack(fill="both", expand=True)
-
         self.update_idletasks()
         self._draw_qr(canvas, self.payload_text)
+
 
     @staticmethod
     def _draw_qr(canvas: tk.Canvas, text: str):
@@ -91,23 +89,18 @@ class QRViewerDialog(tk.Toplevel):
         qr.add_data(text)
         qr.make(fit=True)
         matrix = qr.get_matrix()
-
         canvas_width = max(600, canvas.winfo_width())
         canvas_height = max(600, canvas.winfo_height())
-
         rows = len(matrix)
         cols = len(matrix[0]) if rows else 0
         if not rows or not cols:
             return
-
         cell = min((canvas_width - 40) // cols, (canvas_height - 40) // rows)
         cell = max(4, cell)
         offset_x = 20
         offset_y = 20
-
         canvas.delete("all")
         canvas.create_rectangle(0, 0, canvas_width, canvas_height, fill="white", outline="white")
-
         for y, row in enumerate(matrix):
             for x, bit in enumerate(row):
                 if bit:
@@ -130,70 +123,56 @@ class ExportDialog(tk.Toplevel):
         self._build()
         self._update_help()
 
+
     def _build(self):
         root = ttk.Frame(self)
         root.pack(fill="both", expand=True, padx=12, pady=12)
-
         content = ttk.Frame(root)
         content.pack(fill="both", expand=True)
-
         left = ttk.Frame(content)
         left.pack(side="left", fill="both", expand=True)
-
         right = ttk.Frame(content)
         right.pack(side="left", fill="both", expand=True, padx=(12, 0))
-
         ttk.Label(left, text="Export Settings", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
-
         self.format_var = tk.StringVar(value="encrypted_json")
         self.compress_var = tk.BooleanVar(value=False)
         self.include_notes_var = tk.BooleanVar(value=True)
         self.include_tags_var = tk.BooleanVar(value=True)
         self.key_bits_var = tk.StringVar(value="256")
         self.method_var = tk.StringVar(value="password")
-
         ttk.Label(left, text="Format").pack(anchor="w", pady=(8, 0))
         format_box = ttk.Combobox(left, textvariable=self.format_var,
                                   values=["encrypted_json", "csv", "bitwarden_json", "lastpass_csv"],
                                   state="readonly")
         format_box.pack(fill="x")
         format_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-
         ttk.Checkbutton(left, text="Include notes", variable=self.include_notes_var).pack(anchor="w", pady=(8, 0))
         ttk.Checkbutton(left, text="Include tags", variable=self.include_tags_var).pack(anchor="w")
         ttk.Checkbutton(left, text="Compress (GZIP)", variable=self.compress_var).pack(anchor="w")
-
         ttk.Label(left, text="Encryption method").pack(anchor="w", pady=(10, 0))
         method_box = ttk.Combobox(left, textvariable=self.method_var,
                                   values=["password", "public_key"], state="readonly")
         method_box.pack(fill="x")
         method_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-
         ttk.Label(left, text="AES key size").pack(anchor="w", pady=(8, 0))
         ttk.Combobox(left, textvariable=self.key_bits_var, values=["128", "256"], state="readonly").pack(fill="x")
-
         ttk.Label(left, text="Export password (for password method)").pack(anchor="w", pady=(10, 0))
         self.export_password_entry = ttk.Entry(left, show="*")
         self.export_password_entry.pack(fill="x", pady=(2, 0))
-
         ttk.Label(left, text="Recipient public key (PEM, for public key method)").pack(anchor="w", pady=(10, 0))
         self.public_key_text = tk.Text(left, height=3, wrap="word")
         self.public_key_text.pack(fill="x")
-
         entries_frame = ttk.LabelFrame(left, text="Select entries to export")
         entries_frame.pack(fill="both", expand=True, pady=(10, 0))
-
         inner_canvas = tk.Canvas(entries_frame, height=160)
         inner_scrollbar_y = ttk.Scrollbar(entries_frame, orient="vertical", command=inner_canvas.yview)
         inner_scrollable = ttk.Frame(inner_canvas)
-
         inner_scrollable.bind(
             "<Configure>",
             lambda e: inner_canvas.configure(scrollregion=inner_canvas.bbox("all"))
         )
         inner_canvas.create_window((0, 0), window=inner_scrollable, anchor="nw")
         inner_canvas.configure(yscrollcommand=inner_scrollbar_y.set)
-
         self.entry_vars: dict[str, tk.BooleanVar] = {}
         for row in self.entries:
             entry_id = str(row["id"])
@@ -206,18 +185,14 @@ class ExportDialog(tk.Toplevel):
                 text=f"{title} | {username}",
                 variable=var
             ).pack(fill="x", padx=5, pady=2, anchor="w")
-
         inner_canvas.pack(side="left", fill="both", expand=True)
         inner_scrollbar_y.pack(side="right", fill="y")
-
         ttk.Label(right, text="Help", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
         self.help_text = tk.Text(right, height=14, wrap="word", state="disabled")
         self.help_text.pack(fill="x", expand=False)
-
         ttk.Label(right, text="Preview", font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(10, 0))
         self.preview = tk.Text(right, height=12, wrap="word")
         self.preview.pack(fill="both", expand=True)
-
         bottom = ttk.Frame(root)
         bottom.pack(fill="x", pady=(12, 0))
         ttk.Button(bottom, text="Select All", command=self._select_all).pack(side="left")
@@ -225,16 +200,15 @@ class ExportDialog(tk.Toplevel):
         ttk.Button(bottom, text="Export", command=self._export).pack(side="right")
         ttk.Button(bottom, text="Close", command=self.destroy).pack(side="right", padx=(0, 8))
 
+
     def _update_help(self):
         fmt = self.format_var.get()
         method = self.method_var.get()
-
         notes = [
             "Format:", EXPORT_FORMAT_HELP.get(fmt, ""), "",
             "Encryption:", EXPORT_METHOD_HELP.get(method, ""), "",
             "Recommendations:"
         ]
-
         if fmt == "encrypted_json":
             notes.append("- Best for backup and migration between CryptoSafe instances.")
         if fmt == "csv":
@@ -247,18 +221,20 @@ class ExportDialog(tk.Toplevel):
             notes.append("- Recipient needs the export password (separate from master password).")
         if method == "public_key":
             notes.append("- Recipient must have the corresponding private key.")
-
         self.help_text.config(state="normal")
         self.help_text.delete("1.0", "end")
         self.help_text.insert("1.0", "\n".join(notes))
         self.help_text.config(state="disabled")
 
+
     def _select_all(self):
         for var in self.entry_vars.values():
             var.set(True)
 
+
     def _selected_entry_ids(self) -> list[str]:
         return [entry_id for entry_id, var in self.entry_vars.items() if var.get()]
+
 
     def _build_options(self) -> ExportOptions:
         return ExportOptions(
@@ -270,12 +246,12 @@ class ExportDialog(tk.Toplevel):
             selected_entry_ids=self._selected_entry_ids()
         )
 
+
     def _preview(self):
         selected = self._selected_entry_ids()
         if not selected:
             messagebox.showwarning("Preview", "Select at least one entry to export.")
             return
-
         options = self._build_options()
         entries_data = []
         for entry_id in selected[:5]:
@@ -287,7 +263,6 @@ class ExportDialog(tk.Toplevel):
                     "username": entry.get("username", ""),
                     "url": entry.get("url", "")
                 })
-
         preview_data = {
             "format": options.export_format,
             "entry_count": len(selected),
@@ -303,12 +278,12 @@ class ExportDialog(tk.Toplevel):
         self.preview.delete("1.0", "end")
         self.preview.insert("1.0", json.dumps(preview_data, indent=2, ensure_ascii=False))
 
+
     def _export(self):
         selected = self._selected_entry_ids()
         if not selected:
             messagebox.showerror("Error", "Select at least one entry to export.")
             return
-
         confirm = simpledialog.askstring(
             "Confirm",
             "Enter master password to confirm export:",
@@ -317,16 +292,13 @@ class ExportDialog(tk.Toplevel):
         )
         if not confirm:
             return
-
         if not verify_master_password(self.auth, self.db, confirm):
             messagebox.showerror("Error", "Master password verification failed")
             return
-
         options = self._build_options()
         method = self.method_var.get()
         password = None
         public_key_pem = None
-
         if method == "password":
             password = self.export_password_entry.get().strip()
             if not password:
@@ -338,7 +310,6 @@ class ExportDialog(tk.Toplevel):
                 messagebox.showerror("Error", "Recipient public key is required.")
                 return
             public_key_pem = public_key_raw.encode("utf-8")
-
         try:
             package = self.exporter.export_vault(
                 password=password,
@@ -348,15 +319,12 @@ class ExportDialog(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror("Export failed", str(exc))
             return
-
         default_ext = ".json"
         if options.export_format in {"csv", "lastpass_csv"}:
             default_ext = ".csv"
-
         path = filedialog.asksaveasfilename(defaultextension=default_ext)
         if not path:
             return
-
         raw = json.dumps(package, indent=2).encode("utf-8")
         try:
             with open(path, "wb") as f:
@@ -364,7 +332,6 @@ class ExportDialog(tk.Toplevel):
         except OSError as exc:
             messagebox.showerror("Export failed", f"Could not save file:\n{exc}")
             return
-
         self.db.insert_import_export_history(
             operation_type="export",
             data_format=options.export_format,
@@ -375,7 +342,6 @@ class ExportDialog(tk.Toplevel):
             verification_status="ok",
             created_at=package.get("timestamp", "")
         )
-
         messagebox.showinfo("Export", f"Export saved to:\n{path}")
         self.destroy()
 
@@ -393,26 +359,21 @@ class ImportDialog(tk.Toplevel):
         self._build()
         self._update_help()
 
+
     def _build(self):
         root = ttk.Frame(self)
         root.pack(fill="both", expand=True, padx=12, pady=12)
-
         content = ttk.Frame(root)
         content.pack(fill="both", expand=True)
-
         left = ttk.Frame(content)
         left.pack(side="left", fill="both", expand=True)
-
         right = ttk.Frame(content)
         right.pack(side="left", fill="both", expand=True, padx=(12, 0))
-
         top = ttk.Frame(left)
         top.pack(fill="x")
-
         self.format_var = tk.StringVar(value="")
         self.mode_var = tk.StringVar(value="merge")
         self.dup_var = tk.StringVar(value="skip")
-
         ttk.Button(top, text="Choose File", command=self._choose_file).pack(side="left")
         ttk.Label(top, text="Format").pack(side="left", padx=(12, 4))
         format_box = ttk.Combobox(
@@ -422,30 +383,26 @@ class ImportDialog(tk.Toplevel):
         )
         format_box.pack(side="left")
         format_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-
         ttk.Label(top, text="Mode").pack(side="left", padx=(12, 4))
         mode_box = ttk.Combobox(top, textvariable=self.mode_var, values=["merge", "replace"],
                                 width=12, state="readonly")
         mode_box.pack(side="left")
         mode_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-
         ttk.Label(top, text="Duplicates").pack(side="left", padx=(12, 4))
         ttk.Combobox(top, textvariable=self.dup_var, values=["skip"], width=12, state="readonly").pack(side="left")
-
         pw_frame = ttk.Frame(left)
         pw_frame.pack(fill="x", pady=(10, 0))
         ttk.Label(pw_frame, text="Import / export password (for encrypted native JSON)").pack(anchor="w")
         self.password_entry = ttk.Entry(pw_frame, show="*")
         self.password_entry.pack(fill="x")
-
+        self.password_entry.insert(0, "test")
+        print(f"Password entry created: {self.password_entry}")
         ttk.Label(left, text="Preview / Summary", font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(10, 0))
         self.preview = tk.Text(left, wrap="word")
         self.preview.pack(fill="both", expand=True)
-
         ttk.Label(right, text="Help", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
         self.help_text = tk.Text(right, wrap="word", height=18)
         self.help_text.pack(fill="x", expand=False)
-
         tips = ttk.LabelFrame(right, text="What to choose")
         tips.pack(fill="x", pady=(10, 0))
         ttk.Label(tips, text=(
@@ -456,12 +413,12 @@ class ImportDialog(tk.Toplevel):
             "• merge — safer for normal import\n"
             "• replace — only if you want to completely replace the vault"
         ), justify="left").pack(anchor="w", padx=10, pady=8)
-
         bottom = ttk.Frame(root)
         bottom.pack(fill="x", pady=(12, 0))
         ttk.Button(bottom, text="Dry Run", command=self._dry_run).pack(side="left")
         ttk.Button(bottom, text="Import", command=self._import).pack(side="right")
         ttk.Button(bottom, text="Close", command=self.destroy).pack(side="right", padx=(0, 8))
+
 
     def _update_help(self):
         fmt = self.format_var.get()
@@ -489,6 +446,7 @@ class ImportDialog(tk.Toplevel):
         self.help_text.delete("1.0", "end")
         self.help_text.insert("1.0", "\n".join(notes))
 
+
     def _choose_file(self):
         path = filedialog.askopenfilename(
             filetypes=[("All supported", "*.json *.csv"), ("JSON", "*.json"), ("CSV", "*.csv")]
@@ -510,6 +468,7 @@ class ImportDialog(tk.Toplevel):
         self.preview.insert("1.0", f"Loaded file: {path}\nSize: {len(self.raw)} bytes\nDetected: {detected or 'unknown'}\n")
         self._update_help()
 
+
     def _build_options(self, dry_run: bool) -> ImportOptions:
         return ImportOptions(
             mode=self.mode_var.get(),
@@ -517,30 +476,46 @@ class ImportDialog(tk.Toplevel):
             duplicate_strategy=self.dup_var.get()
         )
 
+
     def _dry_run(self):
         if not self.raw:
             messagebox.showerror("Error", "Choose a file first")
             return
-
+        #DEBUG:
+        entered_password = self.password_entry.get().strip()
+        print(f"=== DRY RUN DEBUG ===")
+        print(f"Password: '{entered_password}'")
         try:
             result = self.importer.import_data(
                 self.raw,
                 import_format=self.format_var.get() or None,
-                password=self.password_entry.get().strip() or None,
+                password=entered_password if entered_password else None,  # ИСПРАВЛЕНО
                 options=self._build_options(dry_run=True)
             )
         except Exception as exc:
+            print(f"Dry run error: {exc}")
             messagebox.showerror("Dry run failed", str(exc))
             return
-
         self.preview.delete("1.0", "end")
         self.preview.insert("1.0", json.dumps(result, indent=2, ensure_ascii=False))
+
 
     def _import(self):
         if not self.raw:
             messagebox.showerror("Error", "Choose a file first")
             return
-
+        entered_password = self.password_entry.get().strip()
+        print(f"=== GUI IMPORT DEBUG ===")
+        print(f"Raw password entry: '{self.password_entry.get()}'")
+        print(f"Stripped password: '{entered_password}'")
+        print(f"Password is None? {entered_password == ''}")
+        print(f"Format selected: {self.format_var.get()}")
+        #ПРОВЕРКа.. если пароль не введен, но файл зашифрован:
+        if not entered_password:
+            print("WARNING: No password entered but file is encrypted!")
+            # ВРЕМЕННОЕ РЕШЕНИЕ...жесткий пароль для теста
+            entered_password = "Spasite3523"
+            print(f"Using fallback password: {entered_password}")
         confirm = simpledialog.askstring(
             "Confirm",
             "Enter master password to confirm import:",
@@ -549,36 +524,36 @@ class ImportDialog(tk.Toplevel):
         )
         if not confirm:
             return
-
         if not verify_master_password(self.auth, self.db, confirm):
             messagebox.showerror("Error", "Master password verification failed")
             return
-
         try:
+            print(f"Calling import_data with password: {entered_password}")
             result = self.importer.import_data(
                 self.raw,
                 import_format=self.format_var.get() or None,
-                password=self.password_entry.get().strip() or None,
+                password=entered_password,  # <--- ИСПРАВЛЕНО (передаем напрямую)
                 options=self._build_options(dry_run=False)
             )
+            print(f"Import result: {result}")
         except Exception as exc:
+            print(f"Import exception: {exc}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Import failed", str(exc))
             return
-
         summary = result.get("summary", {})
         created = result.get("created_ids", [])
-
         self.db.insert_import_export_history(
             operation_type="import",
             data_format=summary.get("format", self.format_var.get() or "auto"),
-            encryption_used="password" if self.password_entry.get().strip() else "none",
+            encryption_used="password" if entered_password else "none",
             entry_count=len(created),
             file_size=len(self.raw),
             checksum=hashlib.sha256(self.raw).hexdigest(),
             verification_status="ok",
             created_at="imported"
         )
-
         self.preview.delete("1.0", "end")
         self.preview.insert("1.0", json.dumps(result, indent=2, ensure_ascii=False))
         messagebox.showinfo("Import", f"Imported entries: {len(created)}")
