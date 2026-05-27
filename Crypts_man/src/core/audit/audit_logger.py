@@ -46,6 +46,24 @@ class AuditEventType(Enum):
     SECURITY_EXTERNAL_ACCESS = "security.external_access"
     # Config changes
     CONFIG_CHANGE = "config.change"
+    # Import/Export events (Sprint 6)
+    IMPORT_STARTED = "import.started"
+    IMPORT_COMPLETED = "import.completed"
+    IMPORT_FAILED = "import.failed"
+    EXPORT_STARTED = "export.started"
+    EXPORT_COMPLETED = "export.completed"
+    EXPORT_FAILED = "export.failed"
+    # Sharing events (Sprint 6)
+    SHARE_CREATED = "share.created"
+    SHARE_ACCESSED = "share.accessed"
+    SHARE_REVOKED = "share.revoked"
+    SHARE_EXPIRED = "share.expired"
+    # Contact management (Sprint 6)
+    CONTACT_ADDED = "contact.added"
+    CONTACT_REMOVED = "contact.removed"
+    CONTACT_UPDATED = "contact.updated"
+
+
 
 
 @dataclass

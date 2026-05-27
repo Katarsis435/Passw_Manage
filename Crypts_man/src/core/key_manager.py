@@ -75,17 +75,20 @@ class KeyManager:
         )
         return kdf.derive(password.encode('utf-8'))
 
-
     def verify_password(self, password: str, stored_hash: str) -> bool:
         """Verify password against stored hash (constant-time)"""
+        print(f"DEBUG KeyManager: verifying password, hash type={type(stored_hash)}")
         if not self._crypto_available:
             computed = hashlib.sha256(password.encode()).hexdigest()
             return secrets.compare_digest(computed, stored_hash)
 
         try:
+            # Argon2 верификация
             self.argon2_hasher.verify(stored_hash, password)
+            print("DEBUG: Argon2 verification SUCCESS")
             return True
-        except Exception:
+        except Exception as e:
+            print(f"DEBUG: Argon2 verification FAILED: {e}")
             # Constant-time dummy operation to prevent timing attacks
             secrets.compare_digest(b'dummy', b'dummy')
             return False

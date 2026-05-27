@@ -94,6 +94,14 @@ class AuthenticationManager:
         """Check if user is authenticated"""
         return self._authenticated
 
+    def verify_master_password(self, password: str, stored_hash: str) -> bool:
+        """Verify master password for sensitive operations."""
+        if not password or not stored_hash:
+            return False
+        if isinstance(stored_hash, bytes):
+            stored_hash = stored_hash.decode("utf-8")
+        return self.key_manager.verify_password(password, stored_hash)
+
 
     def get_encryption_key(self) -> Optional[bytes]:
         """Get current encryption key"""
@@ -121,3 +129,4 @@ class AuthenticationManager:
         """Reset failed attempts counter"""
         self._failed_attempts = 0
         self._last_failed_time = 0
+
