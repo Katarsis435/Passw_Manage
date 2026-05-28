@@ -1,36 +1,25 @@
-# requirements.txt
-# Core dependencies for CryptoSafe Manager
-
-# Cryptography
+# Core dependencies
 cryptography>=41.0.0
 argon2-cffi>=21.3.0
-
-# Password strength estimation (optional but recommended)
-zxcvbn-python>=4.4.24
-
-# GUI (tkinter is included with Python)
-# No additional GUI dependencies needed
-
-# Testing
-coverage>=7.0.0
-pytest>=9.0.0
-
-# Database (sqlite3 is included with Python)
-# No additional database dependencies needed
-
-
-
-# Sprint 4 - Clipboard dependencies
 pyperclip>=1.8.2
-# Windows-specific
-pywin32>=306; sys_platform == 'win32'
-# macOS-specific
+
+# Password strength (optional but recommended)
+zxcvbn>=4.4.28
+
+# QR code support (Sprint 6)
+qrcode>=7.4.2
+pillow>=10.0.0
+
+# System tray (Sprint 7)
+pystray>=2.0.0
+
+# PDF export for audit logs (Sprint 5)
+reportlab>=4.0.0
+
+# Platform-specific (Sprint 4)
+pywin32>=305; sys_platform == 'win32'
 pyobjc>=9.0; sys_platform == 'darwin'
 
-reportlab>=4.0.0
-
-
-
-
-qrcode[pil]>=7.4.2
-reportlab>=4.0.0
+# Testing
+pytest>=7.0.0
+psutil>=5.9.0  # For memory usage tests
