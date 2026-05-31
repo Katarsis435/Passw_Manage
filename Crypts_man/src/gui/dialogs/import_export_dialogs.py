@@ -489,7 +489,7 @@ class ImportDialog(tk.Toplevel):
             result = self.importer.import_data(
                 self.raw,
                 import_format=self.format_var.get() or None,
-                password=entered_password if entered_password else None,  # ИСПРАВЛЕНО
+                password=entered_password if entered_password else None,  #иСПРАВЛЕНО
                 options=self._build_options(dry_run=True)
             )
         except Exception as exc:

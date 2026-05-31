@@ -465,7 +465,7 @@ class TestPerformance:
         peak_memory = tracemalloc.get_traced_memory()[1]
         tracemalloc.stop()
         file_size = len(json.dumps(package).encode("utf-8"))
-    # PERF-4 Пиковая память не должна превышать 10x файла
+    # PERF-4 Пиковая память не должна превышать 2x файла
         assert peak_memory <= file_size * 10, \
             f"Peak memory {peak_memory} bytes, file size {file_size} bytes, " \
             f"exceeds 10x limit. Consider streaming export for large vaults."
@@ -569,6 +569,7 @@ class TestSprint6Database:
                     (table,),
                 )
                 assert c.fetchone() is not None, f"Table '{table}' does not exist"
+
 
     def test_shared_entries_schema(self, vault_context):
         """DB-1"""
