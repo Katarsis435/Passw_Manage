@@ -240,7 +240,7 @@ class Database:
 
 
     def _safe_migrate_id_to_text(self, cursor):
-        """Безопасная миграция id INTEGER → TEXT с сохранением данных"""
+        """Безопасная миграция id INTEGER => TEXT с сохранением данных"""
         print("⚠ Migrating id from INTEGER to TEXT...")
         cursor.execute("SELECT COUNT(*) FROM vault_entries")
         count = cursor.fetchone()[0]
@@ -329,13 +329,13 @@ class Database:
             self.db_path,
             check_same_thread=False,
             timeout=self.pool_timeout,
-            isolation_level=None  # Autocommit mode
+            isolation_level=None  #Autocommit mode
         )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
-        conn.execute("PRAGMA cache_size = -2000")  # 2MB cache
+        conn.execute("PRAGMA cache_size = -2000")  #2MB cache
         return conn
 
 

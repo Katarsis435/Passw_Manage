@@ -512,20 +512,22 @@ class EntryManager:
 
     def toggle_favorite(self, entry_id: str) -> bool:
         """Переключить статус избранного (звёздочка)"""
-        with self.db.cursor() as c:
-            c.execute("SELECT favorite FROM vault_entries WHERE id = ?", (entry_id,))
-            row = c.fetchone()
-            if not row:
-                return False
-            # Получаем значение (независимо от типа row)
-            if isinstance(row, tuple):
-                current = row[0]
-            else:
-                current = row['favorite']
+        try:
+            with self.db.cursor() as c:
+                c.execute("SELECT favorite FROM vault_entries WHERE id = ?", (entry_id,))
+                row = c.fetchone()
+                if not row:
+                    return False
+                current = row[0] if isinstance(row, tuple) else row['favorite']
+                new_value = 0 if current else 1
+                c.execute("UPDATE vault_entries SET favorite = ? WHERE id = ?", (new_value, entry_id))
+                return True
+        except Exception as e:
+            return False
 
-            new_value = 0 if current else 1
-            c.execute("UPDATE vault_entries SET favorite = ? WHERE id = ?", (new_value, entry_id))
-            return True
+
+
+
 
     def get_favorites(self) -> List[Dict[str, Any]]:
         """Получить все избранные записи"""

@@ -75,6 +75,7 @@ class SecureTable(ttk.Frame):
         self.context_menu.add_command(label="Copy Username", command=self._copy_username)
         self.context_menu.add_command(label="Copy Password", command=self._copy_password)
         self.context_menu.add_separator()
+        self.context_menu.add_command(label="⭐ в избранное", command=self._toggle_favorite)
         self.context_menu.add_command(label="Edit", command=self._edit_entry)
         self.context_menu.add_command(label="Delete", command=self._delete_entry)
 
@@ -263,7 +264,7 @@ class SecureTable(ttk.Frame):
             for col_id in self.column_order:
                 value = row.get(col_id, '')
                 if col_id == 'favorite':
-                    value = "⭐" if value else "☆"
+                    value = "⭐" if value else "-"
                 if col_id == 'username' and not show_passwords and value:
                     # Mask username after 4 characters
                     if len(value) > 4:
@@ -373,3 +374,19 @@ class SecureTable(ttk.Frame):
                         values = list(self.tree.item(item, 'values'))
                         values[0] = new_value
                         self.tree.item(item, values=values)
+
+
+    def _toggle_favorite(self):
+        selected = self.get_selected_row()
+        if not selected:
+            print("[DEBUG] No row selected")
+            return
+
+        entry_id = selected.get('id')
+        print("[DEBUG] Toggle favorite for entry: {entry_id}")
+        if hasattr(self.parent, 'toggle_favorite'):
+            self.parent.toggle_favorite(entry_id)
+        else:
+            print("[DEBUG] parent.toggle_favorite NOT FOUND")
+
+
