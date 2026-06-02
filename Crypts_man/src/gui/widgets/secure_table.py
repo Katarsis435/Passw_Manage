@@ -14,6 +14,7 @@ class SecureTable(ttk.Frame):
 
         if columns is None:
             self.columns = [
+                ("favorite", "⭐", 40, True),
                 ("id", "ID", 0, False),  # hidden
                 ("title", "Title", 200, True),
                 ("username", "Username", 150, True),
@@ -68,7 +69,7 @@ class SecureTable(ttk.Frame):
         self.tree.bind('<Control-a>', self._select_all)
         self.tree.bind('<Control-c>', self._copy_selected)
         self.tree.bind('<Delete>', self._delete_selected)
-
+        self.tree.bind('<Button-1>', self._on_click)
         # Context menu
         self.context_menu = Menu(self, tearoff=0)
         self.context_menu.add_command(label="Copy Username", command=self._copy_username)
@@ -258,9 +259,11 @@ class SecureTable(ttk.Frame):
         # Add new data
         for row in data:
             values = []
+
             for col_id in self.column_order:
                 value = row.get(col_id, '')
-
+                if col_id == 'favorite':
+                    value = "⭐" if value else "☆"
                 if col_id == 'username' and not show_passwords and value:
                     # Mask username after 4 characters
                     if len(value) > 4:
@@ -352,3 +355,21 @@ class SecureTable(ttk.Frame):
         """Clear cached decrypted entries"""
         if hasattr(self, '_decrypted_cache'):
             self._decrypted_cache.clear()
+
+    def _on_click(self, event):
+        """Обработка клика по звёздочке для переключения избранного"""
+        region = self.tree.identify_region(event.x, event.y)
+        if region == 'cell':
+            column = self.tree.identify_column(event.x)
+            if column == '#1':  # Первая колонка (favorite)
+                item = self.tree.identify_row(event.y)
+                if item:
+                    entry_id = item  # iid = id записи
+                    if hasattr(self.parent, 'toggle_favorite'):
+                        self.parent.toggle_favorite(entry_id)
+                        # Обновляем отображение
+                        current = self.tree.item(item, 'values')[0]
+                        new_value = "☆" if current == "⭐" else "⭐"
+                        values = list(self.tree.item(item, 'values'))
+                        values[0] = new_value
+                        self.tree.item(item, values=values)

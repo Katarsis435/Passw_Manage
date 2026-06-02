@@ -100,3 +100,22 @@ class ClipboardIndicator(ttk.Frame):
     if self.clipboard:
       if self.clipboard.clear(force=True, reason="manual"):
         self.update_status()
+
+  def _on_click(self, event):
+    """Обработка клика по звёздочке для переключения избранного"""
+    region = self.tree.identify_region(event.x, event.y)
+    if region == 'cell':
+      column = self.tree.identify_column(event.x)
+      if column == '#1':  # Первая колонка (favorite)
+        item = self.tree.identify_row(event.y)
+        if item:
+          entry_id = item  # iid = id записи
+          if hasattr(self.parent, 'toggle_favorite'):
+            self.parent.toggle_favorite(entry_id)
+            # Обновляем отображение
+            current = self.tree.item(item, 'values')[0]
+            new_value = "☆" if current == "⭐" else "⭐"
+            values = list(self.tree.item(item, 'values'))
+            values[0] = new_value
+            self.tree.item(item, values=values)
+

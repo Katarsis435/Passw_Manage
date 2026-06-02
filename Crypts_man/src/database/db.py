@@ -122,10 +122,14 @@ class Database:
             conn.close()
 
 
-
     @staticmethod
     def _ensure_sprint6_tables(conn: sqlite3.Connection) -> None:
         cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(vault_entries)")
+        existing_columns = [col[1] for col in cursor.fetchall()]
+        if 'favorite' not in existing_columns:
+            cursor.execute("ALTER TABLE vault_entries ADD COLUMN favorite INTEGER DEFAULT 0")
+            print("✓ Added 'favorite' column to vault_entries")
 
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='import_export_history'")
         exists = cursor.fetchone()

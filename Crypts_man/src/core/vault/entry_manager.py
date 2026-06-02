@@ -460,7 +460,7 @@ class EntryManager:
             if category:
                 query += " AND category = ?"
                 params.append(category)
-            query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+            query += " ORDER BY favorite DESC, updated_at DESC"
             params.extend([limit, offset])
 
             with self.db.cursor() as c:
@@ -470,16 +470,16 @@ class EntryManager:
             return [{
                 'id': str(row[0]), 'title': row[1] or '', 'username': row[2] or '',
                 'url': row[3] or '', 'category': row[4] or '', 'tags': row[5] or '',
-                'created_at': row[6], 'updated_at': row[7]
+                'created_at': row[6], 'updated_at': row[7], 'favorite': row[8] if len(row) > 8 else 0
             } for row in rows]
 
         # С поиском - достаём все и фильтруем в Python
         with self.db.cursor() as c:
             c.execute("""
-                    SELECT id, title, username, url, category, tags, created_at, updated_at
-                    FROM vault_entries
-                    ORDER BY updated_at DESC
-                """)
+                  SELECT id, title, username, url, category, tags, created_at, updated_at, favorite
+                  FROM vault_entries
+                  WHERE 1=1
+              """)
             rows = c.fetchall()
 
         search_term = search.strip()
@@ -510,4 +510,49 @@ class EntryManager:
                 })
 
         # Применяем limit и offset
+
         return results[offset:offset + limit]
+
+
+    def toggle_favorite(self, entry_id: str) -> bool:
+        """Переключить статус избранного (звёздочка)"""
+        with self.db.cursor() as c:
+            c.execute("SELECT favorite FROM vault_entries WHERE id = ?", (entry_id,))
+            row = c.fetchone()
+            if not row:
+                return False
+            # Получаем значение (независимо от типа row)
+            if isinstance(row, tuple):
+                current = row[0]
+            else:
+                current = row['favorite']
+
+            new_value = 0 if current else 1
+            c.execute("UPDATE vault_entries SET favorite = ? WHERE id = ?", (new_value, entry_id))
+            return True
+
+    def get_favorites(self) -> List[Dict[str, Any]]:
+        """Получить все избранные записи"""
+        with self.db.cursor() as c:
+            c.execute("""
+                    SELECT id, title, username, url, category, tags, created_at, updated_at
+                    FROM vault_entries
+                    WHERE favorite = 1
+                    ORDER BY title
+                """)
+            rows = c.fetchall()
+
+        result = []
+        for row in rows:
+            result.append({
+                'id': str(row[0]),
+                'title': row[1] or '',
+                'username': row[2] or '',
+                'url': row[3] or '',
+                'category': row[4] or '',
+                'tags': row[5] or '',
+                'created_at': row[6],
+                'updated_at': row[7],
+                'favorite': 1
+            })
+        return result

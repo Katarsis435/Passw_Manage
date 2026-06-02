@@ -34,40 +34,41 @@ class MainWindow:
         self.root = tk.Tk()
         self.root.title("CryptoSafe Manager")
         self.root.geometry("1200x600")
-        # Spr 7.. System tray
+
+        # UI state - ДО _setup_ui
+        self.show_passwords = False
+        self.current_search = ""
+        self._search_after = None
+        self.current_theme = self.config.get('theme', 'light')
+
+        # System tray
         self.login_dialog = None
         self.tray = None
         self.tray_thread = None
         self.config.set('system_tray_enabled', False)
-        # Buttons
-        self.add_button = None
-        self.edit_button = None
-        self.delete_button = None
-        self.gen_button = None
-        # Managers (initialized after auth)
+
+        # Managers
         self.entry_manager = None
         self.password_generator = PasswordGenerator()
         self.key_manager = None
         self.auth_manager = None
         self._vault_ready = False
         self.clipboard = None
-        # Audit components (Sprint 5)
+
+        # Audit components
         self.audit_logger = None
         self.audit_signer = None
         self.audit_verifier = None
         self.periodic_verification_job = None
-        # UI state
-        self.show_passwords = False
-        self.current_search = ""
-        self._search_after = None
+
         self._setup_ui()
         self._bind_events()
         self._bind_shortcuts()
+
         # Show login after UI is rendered
         self.root.after(100, self._show_login)
-        #мое
+
         self.root.configure(bg='#1e1e1e')
-        self.current_theme = self.config.get('theme', 'light')
         self._apply_theme()
         self._set_window_icon()
 
@@ -76,6 +77,9 @@ class MainWindow:
         """Setup main UI components"""
         style = ttk.Style()
         style.theme_use('clam')
+        style.configure('Dark.TFrame', background='#1e1e1e')
+        style.configure('Light.TFrame', background='#f0f0f0')
+        style.configure('TFrame', background='#f0f0f0')
         # Menu bar
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
@@ -93,6 +97,7 @@ class MainWindow:
         vault_menu.add_command(label="Edit Entry", command=self._edit_entry, accelerator="Ctrl+E")
         vault_menu.add_command(label="Delete Entry", command=self._delete_entry, accelerator="Del")
         vault_menu.add_separator()
+        vault_menu.add_command(label="🗑️ Корзина", command=self._show_trash)
         vault_menu.add_command(label="Generate Password", command=self._show_password_generator, accelerator="Ctrl+G")
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
@@ -103,7 +108,7 @@ class MainWindow:
         view_menu.add_command(label="Clear Clipboard Now", command=self._clear_clipboard_manually,
                               accelerator="Ctrl+Shift+C")
         view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
-        view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
+        #view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
         # Security menu (Spr 5 + spr 7)
         security_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Security", menu=security_menu)
@@ -115,7 +120,7 @@ class MainWindow:
         security_menu.add_command(label="Security Profiles",
                                   command=self._show_security_profiles)  # Spr 7 (опционально)
         security_menu.add_separator()
-        security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
+        #security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
@@ -129,43 +134,43 @@ class MainWindow:
         tools_menu.add_separator()
         tools_menu.add_command(label="Contacts...", command=self._show_contacts_dialog)
         security_menu.add_separator()
-        security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
-        # Toolbar
-        toolbar = ttk.Frame(self.root)
-        toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        self.add_button = ttk.Button(toolbar, text="Add Entry", command=self._add_entry, state=tk.DISABLED)
+        #security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
+        #Toolbar
+        self.toolbar = ttk.Frame(self.root)
+        self.toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        style.configure('Toolbar.TButton', padding=(10, 5))
+        self.add_button = ttk.Button(self.toolbar, text="Add Entry", command=self._add_entry,state=tk.DISABLED, style='Toolbar.TButton')
         self.add_button.pack(side=tk.LEFT, padx=2)
-        self.edit_button = ttk.Button(toolbar, text="Edit", command=self._edit_entry, state=tk.DISABLED)
+        self.edit_button = ttk.Button(self.toolbar, text="Edit", command=self._edit_entry,state=tk.DISABLED, style='Toolbar.TButton')
         self.edit_button.pack(side=tk.LEFT, padx=2)
-        self.delete_button = ttk.Button(toolbar, text="Delete", command=self._delete_entry, state=tk.DISABLED)
+        self.delete_button = ttk.Button(self.toolbar, text="Delete", command=self._delete_entry,state=tk.DISABLED, style='Toolbar.TButton')
         self.delete_button.pack(side=tk.LEFT, padx=2)
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
-        self.gen_button = ttk.Button(toolbar, text="Generate Password", command=self._show_password_generator,
-                                     state=tk.DISABLED)
+        self.gen_button = ttk.Button(self.toolbar, text="Generate Password", command=self._show_password_generator,state=tk.DISABLED, style='Toolbar.TButton')
         self.gen_button.pack(side=tk.LEFT, padx=2)
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+        ttk.Separator(self.toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
         # Search frame
-        search_frame = ttk.Frame(self.root)
-        search_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        ttk.Label(search_frame, text="Search: ").pack(side=tk.LEFT, padx=5)
+        self.search_frame = ttk.Frame(self.root, style='TFrame')
+        self.search_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        ttk.Label(self.search_frame, text="Search: ").pack(side=tk.LEFT, padx=5)
         self.search_var = tk.StringVar()
         self.search_var.trace_add('write', self._on_search_change)
-        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
+        self.search_entry = ttk.Entry(self.search_frame, textvariable=self.search_var, width=40)
         self.search_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side=tk.LEFT, padx=2)
+        ttk.Button(self.search_frame, text="Clear", command=self._clear_search).pack(side=tk.LEFT, padx=2)
         # Filter frame
-        filter_frame = ttk.Frame(self.root)
-        filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        ttk.Label(filter_frame, text="Filter by Category: ").pack(side=tk.LEFT, padx=5)
-        self.category_filter = ttk.Combobox(filter_frame, values=["All", "Work", "Personal", "Finance", "Social"],
+        self.filter_frame = ttk.Frame(self.root, style='TFrame')
+        self.filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Filter by Category: ").pack(side=tk.LEFT, padx=5)
+
+        self.category_filter = ttk.Combobox(self.filter_frame, values=["All", "Work", "Personal", "Finance", "Social"],
                                             state="readonly", width=15)
         self.category_filter.set("All")
         self.category_filter.bind('<<ComboboxSelected>>', self._on_filter_change)
         self.category_filter.pack(side=tk.LEFT, padx=5)
         # Main table
-        table_frame = ttk.Frame(self.root)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.table = SecureTable(table_frame)
+        self.table_frame = ttk.Frame(self.root, style='TFrame')
+        self.table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.table = SecureTable(self.table_frame)
         self.table.pack(fill=tk.BOTH, expand=True)
         self.table.parent = self
         self.table.edit_entry_callback = self._edit_entry
@@ -173,14 +178,13 @@ class MainWindow:
         # Status bar
         self.status_frame = ttk.Frame(self.root)
         self.status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        self.status_label = ttk.Label(self.status_frame, text="Ready", relief=tk.SUNKEN)
+        self.status_label = tk.Label(self.status_frame, text="Ready", relief=tk.SUNKEN, bg='#1e1e1e', fg='#ffffff', anchor=tk.W)
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        # Clipboard indicator (Sprint 4)
+        # Clipboard indicator
         self.clipboard_indicator = ClipboardIndicator(self.status_frame, self)
         self.clipboard_indicator.pack(side=tk.RIGHT, padx=5)
-        self.lock_status = ttk.Label(self.status_frame, text="🔒 Locked", foreground="red")
+        self.lock_status = tk.Label(self.status_frame, text="🔒 Locked", fg="red", bg='#1e1e1e')
         self.lock_status.pack(side=tk.RIGHT, padx=5)
-
 
 
     def _bind_shortcuts(self):
@@ -270,6 +274,14 @@ class MainWindow:
             import traceback
             traceback.print_exc()
 
+    def _show_trash(self):
+        """Show trash dialog for restoring deleted entries"""
+        if not self._vault_ready or not self.entry_manager:
+            messagebox.showwarning("Заблокировано", "Сначала разблокируйте хранилище")
+            return
+
+        from Crypts_man.src.gui.dialogs.trash_dialog import TrashDialog
+        TrashDialog(self.root, self.entry_manager)
 
     def _debug_show_login(self):
         """Debug version of show_login"""
@@ -299,32 +311,77 @@ class MainWindow:
 
 
     def _apply_theme(self):
-        """Apply current theme"""
+        """Apply current theme - changes only colors, not widgets"""
         from src.gui.themes import apply_theme
         theme = apply_theme(self.root, self.current_theme)
+
         style = ttk.Style()
+
         if self.current_theme == "dark":
-            style.configure("Treeview",
-                            background=theme.get("tree_bg", "#252526"),
-                            foreground=theme.get("tree_fg", "#cccccc"),
-                            fieldbackground=theme.get("tree_bg", "#252526"))
-            style.configure("Treeview.Heading",
-                            background=theme.get("button_bg", "#3c3c3c"),
-                            foreground=theme.get("fg", "#ffffff"))
+            # ===== СТИЛИ ДЛЯ ТЕМНОЙ ТЕМЫ =====
+
+            # Фреймы
+            style.configure('TFrame', background='#1e1e1e')
+
+            # Поля ввода
+            style.configure('TEntry', fieldbackground='#2d2d2d', foreground='#ffffff', insertcolor='#ffffff')
+            style.configure('TCombobox', fieldbackground='#2d2d2d', foreground='#ffffff')
+
+            # Надписи
+            style.configure('TLabel', background='#1e1e1e', foreground='#ffffff')
+
+            # Кнопки
+            style.configure('TButton', background='#3c3c3c', foreground='#ffffff',
+                            borderwidth=1, focuscolor='none')
+            style.map('TButton',
+                      background=[('active', '#0e639c'), ('pressed', '#0e639c')])
+
+            # Скроллбары
+            style.configure('Vertical.TScrollbar', background='#3c3c3c', troughcolor='#2d2d2d')
+            style.configure('Horizontal.TScrollbar', background='#3c3c3c', troughcolor='#2d2d2d')
+
+            # МЕНЮ (добавлено)
+            self.root.option_add('*Menu.background', '#2d2d2d')
+            self.root.option_add('*Menu.foreground', '#ffffff')
+            self.root.option_add('*Menu.selectColor', '#0e639c')
+
+            # Корневое окно
+            self.root.configure(bg='#1e1e1e')
+
+            # Статус бар
+            self.status_label.configure(bg='#1e1e1e', fg='#ffffff')
+            self.lock_status.configure(bg='#1e1e1e', fg='red')
+
+            # Combobox
+            #self.category_filter.configure(background='#2d2d2d', foreground='#ffffff')
+
         else:
-            style.configure("Treeview",
-                            background=theme.get("tree_bg", "#ffffff"),
-                            foreground=theme.get("tree_fg", "#000000"),
-                            fieldbackground=theme.get("tree_bg", "#ffffff"))
-        if hasattr(self, 'table') and hasattr(self.table, 'get_children'):
-            current_data = self.table.get_children()
-            if current_data:
-                self._load_vault_data()
-        if hasattr(self, 'status_frame'):
-            try:
-                self.status_frame.configure(bg=theme.get("status_bg", "#e0e0e0"))
-            except:
-                pass
+            # ===== СТИЛИ ДЛЯ СВЕТЛОЙ ТЕМЫ =====
+            style.configure('TFrame', background='#f0f0f0')
+            style.configure('TEntry', fieldbackground='#ffffff', foreground='#000000', insertcolor='#000000')
+            style.configure('TCombobox', fieldbackground='#ffffff', foreground='#000000')
+            style.configure('TLabel', background='#f0f0f0', foreground='#000000')
+            style.configure('TButton', background='#e0e0e0', foreground='#000000')
+            style.map('TButton', background=[('active', '#0078d4')])
+            style.configure('Vertical.TScrollbar', background='#e0e0e0', troughcolor='#f0f0f0')
+            style.configure('Horizontal.TScrollbar', background='#e0e0e0', troughcolor='#f0f0f0')
+
+            # МЕНЮ (добавлено)
+            self.root.option_add('*Menu.background', '#f0f0f0')
+            self.root.option_add('*Menu.foreground', '#000000')
+            self.root.option_add('*Menu.selectColor', '#0078d4')
+            self.root.configure(bg='#f0f0f0')
+            self.status_label.configure(bg='#f0f0f0', fg='#000000')
+            self.lock_status.configure(bg='#f0f0f0', fg='red')
+            self.category_filter.configure(background='#ffffff', foreground='#000000')
+        # Принудительно обновляем все фреймы
+        for frame in [self.search_frame, self.filter_frame, self.table_frame, self.status_frame]:
+            if frame:
+                frame.configure(style='TFrame')
+        # Обновляем таблицу
+        if hasattr(self, 'table') and self._vault_ready:
+            self._load_vault_data()
+        self.root.update_idletasks()
         return theme
 
 
@@ -333,8 +390,7 @@ class MainWindow:
         self.current_theme = 'dark' if self.current_theme == 'light' else 'light'
         self.config.set('theme', self.current_theme)
         self._apply_theme()
-        self.status_label.config(text=f"Theme changed to {self.current_theme}")
-        self.status_label.update()
+        # self.status_label.config(text=f"Theme changed to {self.current_theme}")
 
 
     def _on_entry_changed(self, data):
@@ -780,7 +836,6 @@ class MainWindow:
             self.activity_monitor.stop_monitoring()
 
 
-
     def _init_vault_components(self):
         """Initialize vault components AFTER authentication"""
         from Crypts_man.src.core.vault.entry_manager import EntryManager
@@ -812,6 +867,7 @@ class MainWindow:
           self._vault_ready = False
         self._init_activity_monitor()
 
+
     def _init_activity_monitor(self):
         """Initialize activity monitor for auto-lock"""
         try:
@@ -831,6 +887,7 @@ class MainWindow:
             print("✓ Activity monitor started")
         except Exception as e:
             print(f"⚠ Activity monitor failed: {e}")
+
 
     def _show_login(self):
         """Show login dialog"""
@@ -913,9 +970,6 @@ class MainWindow:
         password_entry.bind('<Return>', lambda e: self._do_login_action(password_entry, error_label, dialog))
 
         print("[DEBUG] Login dialog created successfully")
-
-
-
 
 
     def _cancel_login(self, dialog):
@@ -1268,6 +1322,9 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
+
 
     def _edit_entry(self):
         """Edit selected entry"""
@@ -1440,6 +1497,9 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
+
 
     def _delete_entry(self):
         """Delete selected entry"""
@@ -1567,20 +1627,9 @@ class MainWindow:
 
     def _show_about(self):
         """Show about dialog"""
-        about_text = """CryptoSafe Manager
-        Version 1.0 (Sprint 5)
-        A secure password manager with AES-256-GCM encryption and tamper-evident audit logging.
+        from Crypts_man.src.gui.dialogs.about_dialog import AboutDialog
+        AboutDialog(self.root)
 
-        Features:
-        • Per-entry AES-256-GCM encryption
-        • Secure password generator with strength analysis
-        • Full-text search and filtering
-        • Tamper-evident audit logging with cryptographic signatures
-        • Secure clipboard with auto-clear
-        • Soft delete with restore capability
-
-        © 2026 CryptoSafe Single"""
-        messagebox.showinfo("About", about_text)
 
 
     def _show_export_dialog(self):
@@ -1599,6 +1648,9 @@ class MainWindow:
             import traceback
             traceback.print_exc()
 
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
+
 
     def _show_import_dialog(self):
         if not self._vault_ready or not self.entry_manager:
@@ -1615,6 +1667,8 @@ class MainWindow:
             messagebox.showerror("Error", f"Could not open import dialog: {e}")
             import traceback
             traceback.print_exc()
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
 
 
     def _show_share_dialog(self):
@@ -1640,6 +1694,8 @@ class MainWindow:
             messagebox.showerror("Error", f"Could not open share dialog: {e}")
             import traceback
             traceback.print_exc()
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
 
 
     def _show_contacts_dialog(self):
@@ -1663,6 +1719,8 @@ class MainWindow:
                 ContactsDialog(self.root, self.db, key_exchange)
             except ImportError as e:
                 messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
+        from src.gui.themes import apply_theme
+        apply_theme(dialog, self.current_theme)
 
 
     def _quit(self):
@@ -1729,6 +1787,7 @@ class MainWindow:
         entries = self.audit_logger.get_entries(limit=10)
         messagebox.showinfo("Audit Stats", f"Total entries in log: {len(entries)}")
 
+
     def _get_app_icon_path(self):
         """Get path to application icon"""
         # Варианты путей для поиска иконки
@@ -1777,6 +1836,15 @@ class MainWindow:
             print("⚠ No window icon found, using default")
 
 
+    def toggle_favorite(self, entry_id: str):
+        """Переключить избранное (звёздочка)"""
+        if not self._vault_ready or not self.entry_manager:
+            return
+        try:
+            self.entry_manager.toggle_favorite(entry_id)
+            self._load_vault_data()  # Обновить таблицу
+        except Exception as e:
+            print(f"Error toggling favorite: {e}")
 
     def run(self):
         """Run the main application"""
