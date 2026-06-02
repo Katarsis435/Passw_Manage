@@ -445,22 +445,21 @@ class EntryManager:
                 deleted += 1
         return deleted
 
-
     def get_all_entries_metadata(self, limit: int = 1000, offset: int = 0,
-                                 search: str = None, category: str = None) -> List[Dict[str, Any]]:
+                                   search: str = None, category: str = None) -> List[Dict[str, Any]]:
         """Get entries with fuzzy search"""
         # Без поиска - обычный SQL
         if not search or not search.strip():
             query = """
-                    SELECT id, title, username, url, category, tags, created_at, updated_at
-                    FROM vault_entries
-                    WHERE 1=1
-                """
+                      SELECT id, title, username, url, category, tags, created_at, updated_at, favorite
+                      FROM vault_entries
+                      WHERE 1=1
+                  """
             params = []
             if category:
                 query += " AND category = ?"
                 params.append(category)
-            query += " ORDER BY favorite DESC, updated_at DESC"
+            query += " ORDER BY favorite DESC, updated_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
 
             with self.db.cursor() as c:
@@ -476,10 +475,9 @@ class EntryManager:
         # С поиском - достаём все и фильтруем в Python
         with self.db.cursor() as c:
             c.execute("""
-                  SELECT id, title, username, url, category, tags, created_at, updated_at, favorite
-                  FROM vault_entries
-                  WHERE 1=1
-              """)
+                    SELECT id, title, username, url, category, tags, created_at, updated_at, favorite
+                    FROM vault_entries
+                """)
             rows = c.fetchall()
 
         search_term = search.strip()
@@ -492,7 +490,6 @@ class EntryManager:
             category_val = row[4] or ''
             tags_val = row[5] or ''
 
-            # Проверяем совпадение с поиском
             if (fuzzy_match(search_term, title) or
                 fuzzy_match(search_term, username) or
                 fuzzy_match(search_term, url) or
@@ -506,10 +503,9 @@ class EntryManager:
                     'category': category_val,
                     'tags': tags_val,
                     'created_at': row[6],
-                    'updated_at': row[7]
+                    'updated_at': row[7],
+                    'favorite': row[8] if len(row) > 8 else 0
                 })
-
-        # Применяем limit и offset
 
         return results[offset:offset + limit]
 

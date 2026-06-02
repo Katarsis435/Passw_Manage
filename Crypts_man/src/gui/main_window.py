@@ -1125,6 +1125,12 @@ class MainWindow:
 
     def _load_vault_data(self):
         """Load vault data using EntryManager"""
+        with self.db.cursor() as c:
+            c.execute("PRAGMA table_info(vault_entries)")
+            columns = c.fetchall()
+            print("=== КОЛОНКИ В ТАБЛИЦЕ ===")
+            for col in columns:
+                print(f"  {col[1]} ({col[2]})")
         if not self._vault_ready or not self.entry_manager:
             return
 
