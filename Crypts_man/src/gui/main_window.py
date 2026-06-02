@@ -1,6 +1,11 @@
 # src/gui/main_window.py
 import tkinter as tk
+import threading
 import os
+
+
+from pathlib import Path
+from tkinter import messagebox as mb
 from datetime import datetime
 from tkinter import ttk, messagebox
 
@@ -14,6 +19,11 @@ from Crypts_man.src.gui.widgets.secure_table import SecureTable
 from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
 from Crypts_man.src.gui.widgets.clipboard_indicator import ClipboardIndicator
 from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettingsDialog
+from Crypts_man.src.core.security.profiles import SECURITY_PROFILES, apply_profile
+from Crypts_man.src.gui.system_tray import SystemTray
+from Crypts_man.src.core.security.panic_mode import PanicMode
+from Crypts_man.src.core.audit.audit_logger import AuditEventType, AuditSeverity
+
 
 
 class MainWindow:
@@ -23,7 +33,12 @@ class MainWindow:
         self.db = db
         self.root = tk.Tk()
         self.root.title("CryptoSafe Manager")
-        self.root.geometry("1200x700")
+        self.root.geometry("1200x600")
+        # Spr 7.. System tray
+        self.login_dialog = None
+        self.tray = None
+        self.tray_thread = None
+        self.config.set('system_tray_enabled', False)
         # Buttons
         self.add_button = None
         self.edit_button = None
@@ -50,10 +65,17 @@ class MainWindow:
         self._bind_shortcuts()
         # Show login after UI is rendered
         self.root.after(100, self._show_login)
+        #мое
+        self.root.configure(bg='#1e1e1e')
+        self.current_theme = self.config.get('theme', 'light')
+        self._apply_theme()
+        self._set_window_icon()
 
 
     def _setup_ui(self):
         """Setup main UI components"""
+        style = ttk.Style()
+        style.theme_use('clam')
         # Menu bar
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
@@ -81,13 +103,19 @@ class MainWindow:
         view_menu.add_command(label="Clear Clipboard Now", command=self._clear_clipboard_manually,
                               accelerator="Ctrl+Shift+C")
         view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
-        # Security menu (Spr 5)
+        view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
+        # Security menu (Spr 5 + spr 7)
         security_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Security", menu=security_menu)
         security_menu.add_command(label="View Audit Log", command=self._show_audit_viewer, accelerator="Ctrl+Shift+A")
         security_menu.add_command(label="Verify Audit Integrity", command=self._verify_audit_logs)
         security_menu.add_separator()
         security_menu.add_command(label="Export Audit Logs", command=self._export_audit_logs)
+        security_menu.add_command(label="Auto-Lock Settings", command=self._show_auto_lock_settings)  # Spr 7
+        security_menu.add_command(label="Security Profiles",
+                                  command=self._show_security_profiles)  # Spr 7 (опционально)
+        security_menu.add_separator()
+        security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
@@ -154,8 +182,8 @@ class MainWindow:
         self.lock_status.pack(side=tk.RIGHT, padx=5)
 
 
+
     def _bind_shortcuts(self):
-        """Bind keyboard shortcuts"""
         self.root.bind('<Control-n>', lambda e: self._add_entry())
         self.root.bind('<Control-e>', lambda e: self._edit_entry())
         self.root.bind('<Delete>', lambda e: self._delete_entry())
@@ -166,6 +194,99 @@ class MainWindow:
         self.root.bind('<Control-f>', lambda e: self.search_entry.focus_set())
         self.root.bind('<Control-Shift-C>', lambda e: self._clear_clipboard_manually())
         self.root.bind('<Control-Shift-A>', lambda e: self._show_audit_viewer()) #spr 5
+        self.root.bind('<Control-Shift-X>', lambda e: self._activate_panic_mode())  #spr 7
+
+
+    def _activate_panic_mode(self):
+        """Emergency panic mode - Ctrl+Shift+X"""
+        try:
+            print("[PANIC] Activating panic mode...")
+
+            # 1. Clear clipboard immediately
+            if self.clipboard:
+                self.clipboard.clear(force=True, reason="panic")
+                print("[PANIC] Clipboard cleared")
+
+            # 2. Clear cached keys
+            if self.key_manager:
+                self.key_manager.clear_cache()
+                print("[PANIC] Keys cleared")
+
+            # 3. Reset vault state
+            self._vault_ready = False
+            self.entry_manager = None
+
+            # 4. Update UI
+            self.lock_status.config(text="🔒 Locked", foreground="red")
+            self.table.set_data([])
+
+            # 5. Disable all buttons
+            for btn in [self.add_button, self.edit_button, self.delete_button, self.gen_button]:
+                if btn and btn.winfo_exists():
+                    btn.config(state=tk.DISABLED)
+
+            # 6. Minimize window
+            self.root.withdraw()
+            self.root.lower()
+            print("[PANIC] Window minimized")
+
+            # 7. Show panic status
+            self.status_label.config(text="⚠ PANIC MODE ACTIVATED - Vault Locked", foreground="red")
+            self.status_label.update()
+
+            # 8. Stealth mode - fake error
+            if self.config.get('stealth_mode', False):
+                mb.showerror("System Error", "The application has encountered a critical error and must close.")
+
+            # 9. Log to audit
+            if self.audit_logger:
+                self.audit_logger.log_event(
+                    event_type="security.panic.activated",
+                    severity="CRITICAL",
+                    source="panic_mode",
+                    details={"method": "hotkey"},
+                    user_id='user'
+                )
+                print("[PANIC] Event logged")
+
+            # Close any open login dialog
+            if self.login_dialog is not None:
+                try:
+                    self.login_dialog.destroy()
+                    self.login_dialog = None
+                except:
+                    pass
+
+            # 10. Show login window after delay
+            print("[PANIC] Attempting to show login window...")
+            self.root.after(500, self._show_login)
+            # 11. Update tray
+            self._update_tray_status(locked=True)
+
+            print("[PANIC] Panic mode completed")
+
+        except Exception as e:
+            print(f"[PANIC] Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+    def _debug_show_login(self):
+        """Debug version of show_login"""
+        print("[DEBUG] _debug_show_login called")
+        try:
+            # Check if window exists
+            if self.root.winfo_exists():
+                print("[DEBUG] Root window exists")
+                # Show login
+                self._show_login()
+                print("[DEBUG] _show_login completed")
+            else:
+                print("[DEBUG] Root window does not exist!")
+        except Exception as e:
+            print(f"[DEBUG] Error in _debug_show_login: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def _bind_events(self):
@@ -175,6 +296,45 @@ class MainWindow:
         events.subscribe(EventType.ENTRY_DELETED, self._on_entry_changed)
         events.subscribe(EventType.USER_LOGGED_IN, self._on_user_logged_in)
         events.subscribe(EventType.USER_LOGGED_OUT, self._on_user_logged_out)
+
+
+    def _apply_theme(self):
+        """Apply current theme"""
+        from src.gui.themes import apply_theme
+        theme = apply_theme(self.root, self.current_theme)
+        style = ttk.Style()
+        if self.current_theme == "dark":
+            style.configure("Treeview",
+                            background=theme.get("tree_bg", "#252526"),
+                            foreground=theme.get("tree_fg", "#cccccc"),
+                            fieldbackground=theme.get("tree_bg", "#252526"))
+            style.configure("Treeview.Heading",
+                            background=theme.get("button_bg", "#3c3c3c"),
+                            foreground=theme.get("fg", "#ffffff"))
+        else:
+            style.configure("Treeview",
+                            background=theme.get("tree_bg", "#ffffff"),
+                            foreground=theme.get("tree_fg", "#000000"),
+                            fieldbackground=theme.get("tree_bg", "#ffffff"))
+        if hasattr(self, 'table') and hasattr(self.table, 'get_children'):
+            current_data = self.table.get_children()
+            if current_data:
+                self._load_vault_data()
+        if hasattr(self, 'status_frame'):
+            try:
+                self.status_frame.configure(bg=theme.get("status_bg", "#e0e0e0"))
+            except:
+                pass
+        return theme
+
+
+    def _toggle_theme(self):
+        """Toggle between light and dark theme"""
+        self.current_theme = 'dark' if self.current_theme == 'light' else 'light'
+        self.config.set('theme', self.current_theme)
+        self._apply_theme()
+        self.status_label.config(text=f"Theme changed to {self.current_theme}")
+        self.status_label.update()
 
 
     def _on_entry_changed(self, data):
@@ -201,6 +361,9 @@ class MainWindow:
             self._init_vault_components()
             self._load_vault_data()
             self._init_clipboard_service()
+        if hasattr(self, 'activity_monitor'):
+            self.activity_monitor.start_monitoring()
+            self.activity_monitor.reset_activity()
 
         def enable_buttons_safe():
             try:
@@ -212,6 +375,9 @@ class MainWindow:
             except tk.TclError:
                 pass
         self.root.after(50, enable_buttons_safe)
+        #if self.config.get('system_tray_enabled', True):
+        #    self.root.after(100, self._init_system_tray)
+        #    self._update_tray_status(locked=False)
 
 
     def _retry_audit_init(self):
@@ -399,18 +565,26 @@ class MainWindow:
 
     def _show_audit_viewer(self):
         """Show audit log viewer dialog"""
+        if not self._vault_ready or not self.auth_manager or not self.auth_manager.is_authenticated():
+            messagebox.showwarning("Locked", "Please unlock the vault first to view audit logs")
+            return
         if not hasattr(self, 'audit_logger') or not self.audit_logger:
             messagebox.showwarning("Not Available", "Audit system not initialized yet.\nPlease wait or re-login.")
             return
         try:
             from Crypts_man.src.gui.dialogs.audit_viewer_dialog import AuditViewerDialog
-            AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
+            from Crypts_man.src.gui.themes import apply_theme
+            dialog = AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
+            apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open audit viewer: {e}")
 
 
     def _verify_audit_logs(self):
         """Manually verify audit logs"""
+        if not self._vault_ready or not self.auth_manager or not self.auth_manager.is_authenticated():
+            messagebox.showwarning("Locked", "Please unlock the vault first to view audit logs")
+            return
         if not hasattr(self, 'audit_verifier') or not self.audit_verifier:
             messagebox.showwarning("Not Available", "Audit system not initialized")
             return
@@ -466,15 +640,96 @@ class MainWindow:
 
     def _export_audit_logs(self):
         """Export audit logs"""
+        if not self._vault_ready or not self.auth_manager or not self.auth_manager.is_authenticated():
+            messagebox.showwarning("Locked", "Please unlock the vault first to view audit logs")
+            return #если заблок -- нелья
         if not hasattr(self, 'audit_logger') or not self.audit_logger:
             messagebox.showwarning("Not Available", "Audit system not initialized")
             return
-
         try:
             from Crypts_man.src.gui.dialogs.audit_export_dialog import AuditExportDialog
             AuditExportDialog(self.root, self.audit_logger, self.audit_signer)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open export dialog: {e}")
+
+
+    def _show_auto_lock_settings(self):
+        """Show auto-lock configuration dialog"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Auto-Lock Settings")
+        dialog.geometry("400x300")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text="Lock vault after inactivity:", font=('Arial', 10, 'bold')).pack(anchor=tk.W,
+                                                                                                    pady=(0, 10))
+        timeout_frame = ttk.Frame(main_frame)
+        timeout_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(timeout_frame, text="Minutes:").pack(side=tk.LEFT)
+        timeout_var = tk.IntVar(value=self.config.get('auto_lock_minutes', 5))
+        spinbox = ttk.Spinbox(timeout_frame, from_=1, to=60, textvariable=timeout_var, width=10)
+        spinbox.pack(side=tk.LEFT, padx=10)
+        ttk.Label(timeout_frame, text="(1-60 minutes)").pack(side=tk.LEFT)
+        preview_label = ttk.Label(main_frame, text=f"Will lock after {timeout_var.get()} minutes of inactivity",
+                                  foreground="gray")
+        preview_label.pack(pady=10)
+
+        def update_preview(*args):
+            preview_label.config(text=f"Will lock after {timeout_var.get()} minutes of inactivity")
+        timeout_var.trace_add('write', update_preview)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=20)
+
+        def save():
+            self.config.set('auto_lock_minutes', timeout_var.get())
+            dialog.destroy()
+            messagebox.showinfo("Settings", f"Auto-lock set to {timeout_var.get()} minutes")
+
+        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+
+    def _show_security_profiles(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Security Profiles")
+        dialog.geometry("500x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(main_frame, text="Select Security Level:", font=('Arial', 12, 'bold')).pack(pady=10)
+        current_profile = self.config.get('security_profile', 'standard')
+        profiles = [
+            ("Standard", "standard",
+             "Balanced security and usability\n• 10 min auto-lock\n• 30 sec clipboard timeout\n• Standard monitoring"),
+            ("Enhanced", "enhanced",
+             "Extra protection with some inconvenience\n• 3 min auto-lock\n• 15 sec clipboard timeout\n• Enhanced monitoring"),
+            ("Paranoid", "paranoid",
+             "Maximum security, minimal convenience\n• 1 min auto-lock\n• 5 sec clipboard timeout\n• Stealth mode enabled")
+        ]
+        profile_var = tk.StringVar(value=current_profile)
+        for name, value, desc in profiles:
+            frame = ttk.Frame(main_frame)
+            frame.pack(fill=tk.X, pady=5)
+            rb = ttk.Radiobutton(frame, text=name, variable=profile_var, value=value)
+            rb.pack(side=tk.LEFT)
+            desc_label = ttk.Label(frame, text=desc, foreground="gray", font=('Arial', 8))
+            desc_label.pack(side=tk.LEFT, padx=20)
+
+        def apply():
+            selected = profile_var.get()
+            apply_profile(self.config, selected)
+            self.config.set('security_profile', selected)
+            dialog.destroy()
+            messagebox.showinfo("Profile Applied",
+                                f"Security profile set to {selected.upper()}\nSome settings may require restart.")
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=20)
+        ttk.Button(button_frame, text="Apply", command=apply).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
 
 
     def _init_clipboard_service(self):
@@ -484,6 +739,28 @@ class MainWindow:
             if self.clipboard_indicator:
                 self.clipboard_indicator.set_clipboard_service(self.clipboard)
                 self.clipboard_indicator.start_updates()
+
+
+    def _init_system_tray(self):
+        if self.tray is not None:
+            return
+        try:
+            self.tray = SystemTray(self, self.config)
+            self.tray.create_tray_icon()
+            self.tray_thread = threading.Thread(target=self.tray.run, daemon=True)
+            self.tray_thread.start()
+            print("✓ System tray initialized")
+        except ImportError as e:
+            print(f"⚠ System tray not available: {e}")
+            self.tray = None
+        except Exception as e:
+            print(f"⚠ Failed to initialize system tray: {e}")
+            self.tray = None
+
+
+    def _update_tray_status(self, locked: bool):
+        if self.tray:
+            self.tray.update_lock_status(locked)
 
 
     def _on_user_logged_out(self, data):
@@ -498,6 +775,10 @@ class MainWindow:
         for btn in btns:
             if btn and btn.winfo_exists():
                 btn.config(state=tk.DISABLED)
+        self._update_tray_status(locked=True)
+        if hasattr(self, 'activity_monitor'):
+            self.activity_monitor.stop_monitoring()
+
 
 
     def _init_vault_components(self):
@@ -529,46 +810,120 @@ class MainWindow:
         else:
           print("✗ No valid encryption key")
           self._vault_ready = False
+        self._init_activity_monitor()
 
+    def _init_activity_monitor(self):
+        """Initialize activity monitor for auto-lock"""
+        try:
+            from Crypts_man.src.core.security.activity_monitor import ActivityMonitor
+
+            def on_lock():
+                self.root.after(0, self._lock_vault)
+
+            self.activity_monitor = ActivityMonitor(on_lock, self.config)
+            self.activity_monitor.start_monitoring()
+
+            # Привязываем события для отслеживания активности
+            self.root.bind('<Key>', lambda e: self.activity_monitor.record_activity())
+            self.root.bind('<Button-1>', lambda e: self.activity_monitor.record_activity())
+            self.root.bind('<Motion>', lambda e: self.activity_monitor.record_activity())
+
+            print("✓ Activity monitor started")
+        except Exception as e:
+            print(f"⚠ Activity monitor failed: {e}")
 
     def _show_login(self):
         """Show login dialog"""
+        print("[DEBUG] _show_login called")
+
+        # Check if dialog already exists and is visible
+        if self.login_dialog is not None:
+            try:
+                if self.login_dialog.winfo_exists():
+                    self.login_dialog.lift()
+                    self.login_dialog.focus_force()
+                    print("[DEBUG] Login dialog already exists, lifted")
+                    return
+            except:
+                self.login_dialog = None
+
+        # Restore main window if minimized
+        try:
+            if self.root.winfo_exists():
+                if self.root.state() == 'iconic':
+                    self.root.deiconify()
+                    print("[DEBUG] Main window restored from minimized")
+                self.root.lift()
+        except Exception as e:
+            print(f"[DEBUG] Error restoring window: {e}")
+
+        # Create login dialog
         dialog = tk.Toplevel(self.root)
+        self.login_dialog = dialog
         dialog.title("Login - CryptoSafe")
-        dialog.geometry("400x300")
+        dialog.geometry("450x350")
         dialog.transient(self.root)
         dialog.grab_set()
+
+        # Center dialog
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (300 // 2)
+        x = (dialog.winfo_screenwidth() // 2) - (450 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (350 // 2)
         dialog.geometry(f"+{x}+{y}")
+
+        # Handle dialog close (X button)
+        dialog.protocol("WM_DELETE_WINDOW", lambda: self._cancel_login(dialog))
+
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
+
         ttk.Label(main_frame, text="CryptoSafe Manager", font=('Arial', 16, 'bold')).pack(pady=10)
+
         auth_hash = self.db.get_auth_hash()
         if not auth_hash:
             self._show_first_run_setup(dialog)
             return
+
         ttk.Label(main_frame, text="Enter Master Password: ").pack(pady=5)
+
         pwd_frame = ttk.Frame(main_frame)
         pwd_frame.pack(pady=5)
+
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
         password_entry.pack(side=tk.LEFT)
         password_entry.focus()
+
         show_pwd = tk.BooleanVar(value=False)
 
         def toggle_password():
             show_pwd.set(not show_pwd.get())
             password_entry.config(show="" if show_pwd.get() else "*")
+
         ttk.Button(pwd_frame, text="👁", width=3, command=toggle_password).pack(side=tk.LEFT, padx=(5, 0))
+
         error_label = ttk.Label(main_frame, text="", foreground="red")
         error_label.pack()
 
         def login_wrapper():
             self._do_login_action(password_entry, error_label, dialog)
+
         login_btn = ttk.Button(main_frame, text="Login", command=login_wrapper)
         login_btn.pack(pady=10)
+
         password_entry.bind('<Return>', lambda e: self._do_login_action(password_entry, error_label, dialog))
+
+        print("[DEBUG] Login dialog created successfully")
+
+
+
+
+
+    def _cancel_login(self, dialog):
+      """Cancel login and exit if needed"""
+      self.login_dialog = None
+      dialog.destroy()
+      # Optionally exit app if user cancels login
+      # self.root.quit()
 
 
     def _do_login_action(self, password_entry, error_label, dialog):
@@ -610,6 +965,10 @@ class MainWindow:
             self._init_audit_system()
             self._load_vault_data()
 
+            if hasattr(self, 'activity_monitor'):
+                self.activity_monitor.reset_activity()
+                print("✓ Activity monitor reset after unlock")
+
             if hasattr(self, 'add_button'):
                 self.add_button.config(state=tk.NORMAL)
             if hasattr(self, 'edit_button'):
@@ -620,7 +979,12 @@ class MainWindow:
                 self.gen_button.config(state=tk.NORMAL)
 
             self._init_clipboard_service()
+            self.login_dialog = None
             dialog.destroy()
+            if self.root.state() == 'iconic':
+                self.root.deiconify()
+            self.status_label.config(text="Ready", foreground="black")
+
         else:
             error_label.config(text="Invalid password")
 
@@ -697,6 +1061,8 @@ class MainWindow:
 
     def _lock_vault(self):
         """Lock the vault"""
+        if hasattr(self, 'activity_monitor'):
+            self.activity_monitor.stop_monitoring()
         if self.auth_manager:
             self.auth_manager.logout()
         self._on_user_logged_out(None)
@@ -1135,13 +1501,12 @@ class MainWindow:
         if not self._vault_ready:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         def use_password(password):
             self.root.clipboard_clear()
             self.root.clipboard_append(password)
             self.status_label.config(text="Password copied to clipboard")
-
-        PasswordGeneratorDialog(self.root, self.password_generator, use_password)
+        from Crypts_man.src.gui.themes import apply_theme
+        dialog = PasswordGeneratorDialog(self.root, self.password_generator, use_password)
 
 
     def _on_search_change(self, *args):
@@ -1222,13 +1587,13 @@ class MainWindow:
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         try:
             from Crypts_man.src.core.import_export.exporter import VaultExporter, ExportOptions
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ExportDialog
-
+            from Crypts_man.src.gui.themes import apply_theme
             exporter = VaultExporter(self.entry_manager, self.auth_manager, self.audit_logger)
-            ExportDialog(self.root, self.db, self.auth_manager, self.entry_manager, exporter)
+            dialog = ExportDialog(self.root, self.db, self.auth_manager, self.entry_manager, exporter)
+            apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open export dialog: {e}")
             import traceback
@@ -1239,13 +1604,13 @@ class MainWindow:
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         try:
             from Crypts_man.src.core.import_export.importer import VaultImporter, ImportOptions
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ImportDialog
-
+            from Crypts_man.src.gui.themes import apply_theme
             importer = VaultImporter(self.entry_manager, self.audit_logger)
-            ImportDialog(self.root, self.db, self.auth_manager, importer)
+            dialog = ImportDialog(self.root, self.db, self.auth_manager, importer)
+            apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open import dialog: {e}")
             import traceback
@@ -1256,23 +1621,21 @@ class MainWindow:
         if not self._vault_ready or not self.entry_manager:
             messagebox.showwarning("Locked", "Please unlock the vault first")
             return
-
         selected = self.table.get_selected_row()
         if not selected:
             messagebox.showinfo("Info", "Please select an entry to share")
             return
-
         try:
             from Crypts_man.src.core.import_export.sharing_service import SharingService, ShareOptions
             from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService, QRCodeService
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ShareDialog
-
+            from Crypts_man.src.gui.themes import apply_theme
             sharing_service = SharingService(self.db, self.entry_manager, self.audit_logger)
             key_exchange = KeyExchangeService()
             qr_service = QRCodeService()
-
-            ShareDialog(self.root, self.db, self.entry_manager, sharing_service,
-                        key_exchange, qr_service, str(selected.get('id')))
+            dialog = ShareDialog(self.root, self.db, self.entry_manager, sharing_service,
+                                 key_exchange, qr_service, str(selected.get('id')))  # ← ИЗМЕНИТЬ
+            apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open share dialog: {e}")
             import traceback
@@ -1283,9 +1646,10 @@ class MainWindow:
         try:
             from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ContactsDialog
-
+            from Crypts_man.src.gui.themes import apply_theme
             key_exchange = KeyExchangeService()
-            ContactsDialog(self.root, self.db, key_exchange)
+            dialog = ContactsDialog(self.root, self.db, key_exchange)
+            apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
             import traceback
@@ -1312,11 +1676,12 @@ class MainWindow:
 
 
     def _show_clipboard_settings(self):
-        """Show clipboard settings dialog"""
         if not self.clipboard:
             messagebox.showwarning("Not Ready", "Clipboard service not initialized")
             return
-        ClipboardSettingsDialog(self.root, self.clipboard, self.config)
+        from Crypts_man.src.gui.themes import apply_theme
+        dialog = ClipboardSettingsDialog(self.root, self.clipboard, self.config)
+        apply_theme(dialog, self.current_theme)
 
 
     def _clear_clipboard_manually(self):
@@ -1363,6 +1728,53 @@ class MainWindow:
         # Проверим сколько всего записей
         entries = self.audit_logger.get_entries(limit=10)
         messagebox.showinfo("Audit Stats", f"Total entries in log: {len(entries)}")
+
+    def _get_app_icon_path(self):
+        """Get path to application icon"""
+        # Варианты путей для поиска иконки
+        base_dir = Path(__file__).parent.parent  # Crypts_man/
+
+        icon_paths = [
+            base_dir / "resources" / "icons" / "app_icon.ico",
+            base_dir / "resources" / "icons" / "app_icon.png",
+            base_dir / "resources" / "icons" / "tray_icon.ico",
+            base_dir / "resources" / "icons" / "tray_icon.png",
+            base_dir / "resources" / "icons" / "icon.ico",
+            base_dir / "resources" / "app_icon.ico",
+        ]
+
+        for path in icon_paths:
+            if path.exists():
+                print(f"✓ Found icon: {path}")
+                return str(path)
+
+        print("⚠ No icon found at:")
+        for path in icon_paths:
+            print(f"  - {path}")
+        return None
+
+
+    def _set_window_icon(self):
+        """Set window icon"""
+        icon_path = self._get_app_icon_path()
+        if icon_path and os.path.exists(icon_path):
+            try:
+                # Для Windows .ico файлов
+                if icon_path.endswith('.ico'):
+                    self.root.iconbitmap(icon_path)
+                    print(f"✓ Window icon set (iconbitmap): {icon_path}")
+                else:
+                    # Для PNG
+                    img = tk.PhotoImage(file=icon_path)
+                    self.root.iconphoto(True, img)
+                    self.root._icon_image = img  # Keep reference to prevent garbage collection
+                    print(f"✓ Window icon set (iconphoto): {icon_path}")
+            except Exception as e:
+                print(f"⚠ Failed to set icon: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("⚠ No window icon found, using default")
 
 
 
