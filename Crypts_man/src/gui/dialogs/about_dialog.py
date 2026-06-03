@@ -8,30 +8,30 @@ class AboutDialog:
     """About dialog with features tab"""
 
     FEATURES = [
-        ("🔐 Управление паролями", [
+        ("Управление паролями", [
             "✓ Добавление/редактирование/удаление записей",
             "✓ Мягкое удаление (возможность восстановления)",
             "✓ Категории: Work, Personal, Finance, Social, Other",
             "✓ Теги для дополнительной организации",
         ]),
-        ("🔍 Поиск и фильтрация", [
+        ("Поиск и фильтрация", [
             "✓ Полнотекстовый поиск с нечётким сопоставлением",
             "✓ Фильтр по категории",
             "✓ Сортировка по любому столбцу",
         ]),
-        ("🔑 Генератор паролей", [
+        ("Генератор паролей", [
             "✓ Длина от 8 до 64 символов",
             "✓ Настраиваемые наборы символов",
             "✓ Мнемонические фразы (correct-horse-battery-42)",
             "✓ Оценка сложности с цветным индикатором",
         ]),
-        ("📋 Защищённый буфер обмена", [
+        ("Защищённый буфер обмена", [
             "✓ Автоочистка через 5-30 секунд",
             "✓ Визуальный индикатор с таймером",
             "✓ Уровни безопасности: Standard → Secure → Paranoid",
             "✓ Ускорение очистки при подозрительной активности",
         ]),
-        ("🔒 Безопасность", [
+        ("Безопасность", [
             "✓ AES-256-GCM шифрование каждой записи",
             "✓ Argon2id для мастер-пароля",
             "✓ Защита от подбора (экспоненциальная задержка)",
@@ -39,24 +39,24 @@ class AboutDialog:
             "✓ Паник-режим (Ctrl+Shift+X)",
             "✓ Автоблокировка при бездействии",
         ]),
-        ("📜 Аудит-лог", [
+        ("Аудит-лог", [
             "✓ Хэш-цепочка (защита от подделки)",
             "✓ Цифровая подпись Ed25519/HMAC",
             "✓ Просмотр с фильтрацией по дате/событию",
             "✓ Экспорт в JSON, CSV, PDF",
         ]),
-        ("📤 Импорт/Экспорт", [
+        ("Импорт/Экспорт", [
             "✓ Форматы: JSON, CSV, Bitwarden, LastPass",
             "✓ Шифрование экспорта паролем или RSA-ключом",
             "✓ Режимы: merge (добавить) / replace (заменить)",
             "✓ Предпросмотр перед импортом",
         ]),
-        ("🤝 Безопасный обмен", [
+        ("Безопасный обмен", [
             "✓ Передача записей по паролю или публичному ключу",
             "✓ QR-код для обмена ключами",
             "✓ Контакты (хранилище публичных ключей)",
         ]),
-        ("⌨️ Горячие клавиши", [
+        ("Горячие клавиши", [
             "• Ctrl+N — новая запись    • Ctrl+E — редактировать",
             "• Del — удалить            • Ctrl+F — поиск",
             "• Ctrl+L — заблокировать    • Ctrl+G — генератор",
@@ -90,7 +90,7 @@ class AboutDialog:
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 15))
 
-        ttk.Label(title_frame, text="🛡️ CryptoSafe Manager", font=('Arial', 18, 'bold')).pack()
+        ttk.Label(title_frame, text="🛡CryptoSafe Manager🛡", font=('Arial', 18, 'bold')).pack()
         ttk.Label(title_frame, text="Кроссплатформенный менеджер паролей", font=('Arial', 10)).pack()
         ttk.Label(title_frame, text="Версия 1.0 | Спринт 7/8", font=('Arial', 9), foreground="gray").pack()
 
@@ -100,7 +100,7 @@ class AboutDialog:
 
         # Вкладка "Возможности"
         features_frame = ttk.Frame(notebook, padding="10")
-        notebook.add(features_frame, text="✅ Возможности")
+        notebook.add(features_frame, text="Возможности")
 
         # Canvas с прокруткой для длинного списка
         canvas = tk.Canvas(features_frame)
@@ -131,9 +131,9 @@ class AboutDialog:
         notebook.add(team_frame, text="👥 О команде")
 
         ttk.Label(team_frame, text="CryptoSafe Manager", font=('Arial', 14)).pack(pady=10)
-        ttk.Label(team_frame, text="Финальный проект по прикладной криптографии", font=('Arial', 10)).pack()
+        ttk.Label(team_frame, text="Финальный проект по дисциплине методы и средства криптографической защиты информации", font=('Arial', 10)).pack()
 
-        ttk.Label(team_frame, text="\n📚 Используемые технологии:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(20, 5))
+        ttk.Label(team_frame, text="\nИспользуемые технологии:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(20, 5))
         techs = [
             "• Python 3.10+",
             "• Tkinter (GUI)",

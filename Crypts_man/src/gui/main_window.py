@@ -20,7 +20,12 @@ from Crypts_man.src.core.clipboard.clipboard_service import ClipboardService
 from Crypts_man.src.gui.widgets.clipboard_indicator import ClipboardIndicator
 from Crypts_man.src.gui.dialogs.clipboard_settings_dialog import ClipboardSettingsDialog
 from Crypts_man.src.core.security.profiles import SECURITY_PROFILES, apply_profile
-from Crypts_man.src.gui.system_tray import SystemTray
+try:
+    from Crypts_man.src.gui.system_tray import SystemTray
+    TRAY_AVAILABLE = True
+except ImportError:
+    TRAY_AVAILABLE = False
+    print("System tray not available (pystray not installed)")
 
 
 class MainWindow:
@@ -29,13 +34,13 @@ class MainWindow:
         self.config = config
         self.db = db
         self.root = tk.Tk()
-        self.root.title("CryptoSafe Manager")
+        self.root.title("CryptoSafe менеджер")
         self.root.geometry("1200x600")
         # UI state
         self.show_passwords = False
         self.current_search = ""
         self._search_after = None
-        self.current_theme = self.config.get('theme', 'light')
+
         # System tray
         self.login_dialog = None
         self.tray = None
@@ -58,120 +63,116 @@ class MainWindow:
         self._bind_shortcuts()
         # Show login after UI is rendered
         self.root.after(100, self._show_login)
-        self.root.configure(bg='#1e1e1e')
-        self._apply_theme()
-        self._set_window_icon()
-
 
     def _setup_ui(self):
         """Setup main UI components"""
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('Dark.TFrame', background='#1e1e1e')
-        style.configure('Light.TFrame', background='#f0f0f0')
-        style.configure('TFrame', background='#f0f0f0')
         # Menu bar
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
         file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Lock Vault", command=self._lock_vault, accelerator="Ctrl+L")
+        menubar.add_cascade(label="Файл", menu=file_menu)
+        file_menu.add_command(label="Заблокировать", command=self._lock_vault, accelerator="Ctrl+L")
         file_menu.add_separator()
-        file_menu.add_command(label="Backup Database", command=self._backup_database)
-        file_menu.add_command(label="Restore Database", command=self._restore_database)
+        file_menu.add_command(label="Резервная копия", command=self._backup_database)
+        file_menu.add_command(label="Костановить из копии", command=self._restore_database)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self._quit)
+        file_menu.add_command(label="Выход", command=self._quit)
         vault_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Vault", menu=vault_menu)
-        vault_menu.add_command(label="Add Entry", command=self._add_entry, accelerator="Ctrl+N")
-        vault_menu.add_command(label="Edit Entry", command=self._edit_entry, accelerator="Ctrl+E")
-        vault_menu.add_command(label="Delete Entry", command=self._delete_entry, accelerator="Del")
+        menubar.add_cascade(label="Хранилище", menu=vault_menu)
+        vault_menu.add_command(label="Добавить запись", command=self._add_entry, accelerator="Ctrl+N")
+        vault_menu.add_command(label="Изменить запись", command=self._edit_entry, accelerator="Ctrl+E")
+        vault_menu.add_command(label="Удалить запись", command=self._delete_entry, accelerator="Del")
         vault_menu.add_separator()
-        vault_menu.add_command(label="🗑️ Корзина", command=self._show_trash)
-        vault_menu.add_command(label="Generate Password", command=self._show_password_generator, accelerator="Ctrl+G")
+        vault_menu.add_command(label="🗑Корзина", command=self._show_trash)
+        vault_menu.add_command(label="Генератор пароля", command=self._show_password_generator, accelerator="Ctrl+G")
         view_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Toggle Password Visibility", command=self._toggle_password_visibility,
+        menubar.add_cascade(label="Вид", menu=view_menu)
+        view_menu.add_command(label="Показать пароли", command=self._toggle_password_visibility,
                               accelerator="Ctrl+Shift+P")
         view_menu.add_separator()
-        view_menu.add_command(label="Clipboard Settings", command=self._show_clipboard_settings)
-        view_menu.add_command(label="Clear Clipboard Now", command=self._clear_clipboard_manually,
+        view_menu.add_command(label="Настройки буфера", command=self._show_clipboard_settings)
+        view_menu.add_command(label="Очистить буфер", command=self._clear_clipboard_manually,
                               accelerator="Ctrl+Shift+C")
-        view_menu.add_command(label="Refresh", command=self._load_vault_data, accelerator="F5")
+        view_menu.add_command(label="Обновить", command=self._load_vault_data, accelerator="F5")
         # Security menu (Spr 5 + spr 7)
         security_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Security", menu=security_menu)
-        security_menu.add_command(label="View Audit Log", command=self._show_audit_viewer, accelerator="Ctrl+Shift+A")
-        security_menu.add_command(label="Verify Audit Integrity", command=self._verify_audit_logs)
+        menubar.add_cascade(label="Безопасность", menu=security_menu)
+        security_menu.add_command(label="Журнал аудита", command=self._show_audit_viewer, accelerator="Ctrl+Shift+A")
+        security_menu.add_command(label="Проверить целостность", command=self._verify_audit_logs)
         security_menu.add_separator()
-        security_menu.add_command(label="Export Audit Logs", command=self._export_audit_logs)
-        security_menu.add_command(label="Auto-Lock Settings", command=self._show_auto_lock_settings)  # Spr 7
-        security_menu.add_command(label="Security Profiles",
-                                  command=self._show_security_profiles)  # Spr 7 (опционально)
+        security_menu.add_command(label="Экспорт логов", command=self._export_audit_logs)
+        security_menu.add_command(label="Автоблокировка", command=self._show_auto_lock_settings)
+        security_menu.add_command(label="Профили безопасности", command=self._show_security_profiles)
         security_menu.add_separator()
-        #security_menu.add_command(label="TEST: Force Audit Entry", command=self._test_audit)
         help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(label="About", command=self._show_about)
+        menubar.add_cascade(label="Помощь", menu=help_menu)
+        help_menu.add_command(label="О программе", command=self._show_about)
         # Tools menu (Sprint 6)
         tools_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Tools", menu=tools_menu)
-        tools_menu.add_command(label="Export Vault...", command=self._show_export_dialog)
-        tools_menu.add_command(label="Import Vault...", command=self._show_import_dialog)
+        menubar.add_cascade(label="Инструменты", menu=tools_menu)
+        tools_menu.add_command(label="Экспорт хранилища...", command=self._show_export_dialog)
+        tools_menu.add_command(label="Импорт хранилища...", command=self._show_import_dialog)
         tools_menu.add_separator()
-        tools_menu.add_command(label="Share Entry...", command=self._show_share_dialog)
+        tools_menu.add_command(label="Поделиться...", command=self._show_share_dialog)
         tools_menu.add_separator()
-        tools_menu.add_command(label="Contacts...", command=self._show_contacts_dialog)
-        security_menu.add_separator()
-        #Toolbar
+        tools_menu.add_command(label="Контакты...", command=self._show_contacts_dialog)
+
+        # Toolbar
         self.toolbar = ttk.Frame(self.root)
         self.toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        style.configure('Toolbar.TButton', padding=(10, 5))
-        self.add_button = ttk.Button(self.toolbar, text="Add Entry", command=self._add_entry,state=tk.DISABLED, style='Toolbar.TButton')
+        self.add_button = ttk.Button(self.toolbar, text="Добавить запись", command=self._add_entry, state=tk.DISABLED)
         self.add_button.pack(side=tk.LEFT, padx=2)
-        self.edit_button = ttk.Button(self.toolbar, text="Edit", command=self._edit_entry,state=tk.DISABLED, style='Toolbar.TButton')
+        self.edit_button = ttk.Button(self.toolbar, text="Отредактировать", command=self._edit_entry, state=tk.DISABLED)
         self.edit_button.pack(side=tk.LEFT, padx=2)
-        self.delete_button = ttk.Button(self.toolbar, text="Delete", command=self._delete_entry,state=tk.DISABLED, style='Toolbar.TButton')
+        self.delete_button = ttk.Button(self.toolbar, text="Удалить", command=self._delete_entry, state=tk.DISABLED)
         self.delete_button.pack(side=tk.LEFT, padx=2)
-        self.gen_button = ttk.Button(self.toolbar, text="Generate Password", command=self._show_password_generator,state=tk.DISABLED, style='Toolbar.TButton')
+        self.gen_button = ttk.Button(self.toolbar, text="Сгенерировать пароль", command=self._show_password_generator,
+                                     state=tk.DISABLED)
         self.gen_button.pack(side=tk.LEFT, padx=2)
         ttk.Separator(self.toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+
         # Search frame
-        self.search_frame = ttk.Frame(self.root, style='TFrame')
+        self.search_frame = ttk.Frame(self.root)
         self.search_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        ttk.Label(self.search_frame, text="Search: ").pack(side=tk.LEFT, padx=5)
+        ttk.Label(self.search_frame, text="🔍Поиск: ").pack(side=tk.LEFT, padx=5)
         self.search_var = tk.StringVar()
         self.search_var.trace_add('write', self._on_search_change)
         self.search_entry = ttk.Entry(self.search_frame, textvariable=self.search_var, width=40)
         self.search_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.search_frame, text="Clear", command=self._clear_search).pack(side=tk.LEFT, padx=2)
-        # Filter frame
-        self.filter_frame = ttk.Frame(self.root, style='TFrame')
-        self.filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        ttk.Label(self.filter_frame, text="Filter by Category: ").pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.search_frame, text="Очистить", command=self._clear_search).pack(side=tk.LEFT, padx=2)
 
-        self.category_filter = ttk.Combobox(self.filter_frame, values=["All", "Work", "Personal", "Finance", "Social"],
+        # Filter frame
+        self.filter_frame = ttk.Frame(self.root)
+        self.filter_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        ttk.Label(self.filter_frame, text="Фильтр по категориям: ").pack(side=tk.LEFT, padx=5)
+        self.category_filter = ttk.Combobox(self.filter_frame,
+                                            values=["Всё", "Работа", "Персональное", "Финансы", "Социальное"],
                                             state="readonly", width=15)
-        self.category_filter.set("All")
+        self.category_filter.set("Всё")
         self.category_filter.bind('<<ComboboxSelected>>', self._on_filter_change)
         self.category_filter.pack(side=tk.LEFT, padx=5)
+
         # Main table
-        self.table_frame = ttk.Frame(self.root, style='TFrame')
+        self.table_frame = ttk.Frame(self.root)
         self.table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.table = SecureTable(self.table_frame)
         self.table.pack(fill=tk.BOTH, expand=True)
         self.table.parent = self
         self.table.edit_entry_callback = self._edit_entry
         self.table.delete_entry_callback = self._delete_entry
-        # Status bar
+
+        # Status bar (светлый, без тёмного фона)
         self.status_frame = ttk.Frame(self.root)
         self.status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        self.status_label = tk.Label(self.status_frame, text="Ready", relief=tk.SUNKEN, bg='#1e1e1e', fg='#ffffff', anchor=tk.W)
+        self.status_label = tk.Label(self.status_frame, text="Готово", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
         # Clipboard indicator
         self.clipboard_indicator = ClipboardIndicator(self.status_frame, self)
         self.clipboard_indicator.pack(side=tk.RIGHT, padx=5)
-        self.lock_status = tk.Label(self.status_frame, text="🔒 Locked", fg="red", bg='#1e1e1e')
+
+        # Lock status (светлый фон)
+        self.lock_status = tk.Label(self.status_frame, text="🔒 Заблокированно", fg="red")
         self.lock_status.pack(side=tk.RIGHT, padx=5)
 
 
@@ -201,7 +202,7 @@ class MainWindow:
                 print("[PANIC] Keys cleared")
             self._vault_ready = False
             self.entry_manager = None
-            self.lock_status.config(text="🔒 Locked", foreground="red")
+            self.lock_status.config(text="🔒 Заблокированно", foreground="red")
             self.table.set_data([])
             for btn in [self.add_button, self.edit_button, self.delete_button, self.gen_button]:
                 if btn and btn.winfo_exists():
@@ -272,72 +273,6 @@ class MainWindow:
         events.subscribe(EventType.USER_LOGGED_OUT, self._on_user_logged_out)
 
 
-    def _apply_theme(self):
-        """Apply current theme - changes only colors, not widgets"""
-        from src.gui.themes import apply_theme
-        theme = apply_theme(self.root, self.current_theme)
-        style = ttk.Style()
-        if self.current_theme == "dark":
-            #СТИЛИ ДЛЯ ТЕМНОЙ ТЕМЫ
-            #Фреймы
-            style.configure('TFrame', background='#1e1e1e')
-            #Поля ввода
-            style.configure('TEntry', fieldbackground='#2d2d2d', foreground='#ffffff', insertcolor='#ffffff')
-            style.configure('TCombobox', fieldbackground='#2d2d2d', foreground='#ffffff')
-            #Надписи
-            style.configure('TLabel', background='#1e1e1e', foreground='#ffffff')
-            #Кнопки
-            style.configure('TButton', background='#3c3c3c', foreground='#ffffff',
-                            borderwidth=1, focuscolor='none')
-            style.map('TButton',
-                      background=[('active', '#0e639c'), ('pressed', '#0e639c')])
-            #Скроллбары
-            style.configure('Vertical.TScrollbar', background='#3c3c3c', troughcolor='#2d2d2d')
-            style.configure('Horizontal.TScrollbar', background='#3c3c3c', troughcolor='#2d2d2d')
-            #МЕНЮ (добавлено)
-            self.root.option_add('*Menu.background', '#2d2d2d')
-            self.root.option_add('*Menu.foreground', '#ffffff')
-            self.root.option_add('*Menu.selectColor', '#0e639c')
-            #Корневое окно
-            self.root.configure(bg='#1e1e1e')
-            #Статус бар
-            self.status_label.configure(bg='#1e1e1e', fg='#ffffff')
-            self.lock_status.configure(bg='#1e1e1e', fg='red')
-        else:
-            # СТИЛИ ДЛЯ СВЕТЛОЙ ТЕМЫ
-            style.configure('TFrame', background='#f0f0f0')
-            style.configure('TEntry', fieldbackground='#ffffff', foreground='#000000', insertcolor='#000000')
-            style.configure('TCombobox', fieldbackground='#ffffff', foreground='#000000')
-            style.configure('TLabel', background='#f0f0f0', foreground='#000000')
-            style.configure('TButton', background='#e0e0e0', foreground='#000000')
-            style.map('TButton', background=[('active', '#0078d4')])
-            style.configure('Vertical.TScrollbar', background='#e0e0e0', troughcolor='#f0f0f0')
-            style.configure('Horizontal.TScrollbar', background='#e0e0e0', troughcolor='#f0f0f0')
-            #МЕНЮ
-            self.root.option_add('*Menu.background', '#f0f0f0')
-            self.root.option_add('*Menu.foreground', '#000000')
-            self.root.option_add('*Menu.selectColor', '#0078d4')
-            self.root.configure(bg='#f0f0f0')
-            self.status_label.configure(bg='#f0f0f0', fg='#000000')
-            self.lock_status.configure(bg='#f0f0f0', fg='red')
-            self.category_filter.configure(background='#ffffff', foreground='#000000')
-        #принудительно обновляем все фреймы
-        for frame in [self.search_frame, self.filter_frame, self.table_frame, self.status_frame]:
-            if frame:
-                frame.configure(style='TFrame')
-        #обновл таблицу
-        if hasattr(self, 'table') and self._vault_ready:
-            self._load_vault_data()
-        self.root.update_idletasks()
-        return theme
-
-
-    def _toggle_theme(self):
-        """Toggle between light and dark theme"""
-        self.current_theme = 'dark' if self.current_theme == 'light' else 'light'
-        self.config.set('theme', self.current_theme)
-        self._apply_theme()
-
 
     def _on_entry_changed(self, data):
         """Handle entry changes"""
@@ -357,7 +292,7 @@ class MainWindow:
     def _on_user_logged_in(self, data):
         """Handle user login event"""
         print("🔓 USER LOGGED IN EVENT")
-        self.lock_status.config(text="🔓 Unlocked", foreground="green")
+        self.lock_status.config(text="🔓 Разблокированно", foreground="green")
         if not self._vault_ready:
             self._init_vault_components()
             self._load_vault_data()
@@ -565,9 +500,9 @@ class MainWindow:
             return
         try:
             from Crypts_man.src.gui.dialogs.audit_viewer_dialog import AuditViewerDialog
-            from Crypts_man.src.gui.themes import apply_theme
+            #from Crypts_man.src.gui.themes import apply_theme
             dialog = AuditViewerDialog(self.root, self.audit_logger, self.audit_verifier)
-            apply_theme(dialog, self.current_theme)
+            #apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open audit viewer: {e}")
 
@@ -728,8 +663,9 @@ class MainWindow:
                 self.clipboard_indicator.set_clipboard_service(self.clipboard)
                 self.clipboard_indicator.start_updates()
 
-
     def _init_system_tray(self):
+        if not TRAY_AVAILABLE:
+            return
         if self.tray is not None:
             return
         try:
@@ -747,7 +683,7 @@ class MainWindow:
 
 
     def _update_tray_status(self, locked: bool):
-        if self.tray:
+        if TRAY_AVAILABLE and self.tray:
             self.tray.update_lock_status(locked)
 
 
@@ -853,12 +789,12 @@ class MainWindow:
         dialog.protocol("WM_DELETE_WINDOW", lambda: self._cancel_login(dialog))
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(main_frame, text="CryptoSafe Manager", font=('Arial', 16, 'bold')).pack(pady=10)
+        ttk.Label(main_frame, text="CryptoSafe менеджер", font=('Arial', 16, 'bold')).pack(pady=10)
         auth_hash = self.db.get_auth_hash()
         if not auth_hash:
             self._show_first_run_setup(dialog)
             return
-        ttk.Label(main_frame, text="Enter Master Password: ").pack(pady=5)
+        ttk.Label(main_frame, text="Введите мастер-пароль: ").pack(pady=5)
         pwd_frame = ttk.Frame(main_frame)
         pwd_frame.pack(pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
@@ -875,7 +811,7 @@ class MainWindow:
 
         def login_wrapper():
             self._do_login_action(password_entry, error_label, dialog)
-        login_btn = ttk.Button(main_frame, text="Login", command=login_wrapper)
+        login_btn = ttk.Button(main_frame, text="Вход", command=login_wrapper)
         login_btn.pack(pady=10)
         password_entry.bind('<Return>', lambda e: self._do_login_action(password_entry, error_label, dialog))
         print("[DEBUG] Login dialog created successfully")
@@ -936,7 +872,7 @@ class MainWindow:
                 self.root.deiconify()
             self.status_label.config(text="Ready", foreground="black")
         else:
-            error_label.config(text="Invalid password")
+            error_label.config(text="неправильный пароль!")
 
 
     def _show_first_run_setup(self, parent):
@@ -944,9 +880,9 @@ class MainWindow:
             widget.destroy()
         main_frame = ttk.Frame(parent, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(main_frame, text="Welcome to CryptoSafe Manager!", font=('Arial', 14, 'bold')).pack(pady=10)
-        ttk.Label(main_frame, text="Create your master password").pack(pady=5)
-        ttk.Label(main_frame, text="Master Password: ").pack(pady=5)
+        ttk.Label(main_frame, text="Добро пожаловать в CryptoSafe менеджер!", font=('Arial', 14, 'bold')).pack(pady=10)
+        ttk.Label(main_frame, text="Придумайте свой мастер-пароль").pack(pady=5)
+        ttk.Label(main_frame, text="Мастер-пароль: ").pack(pady=5)
         pwd_frame1 = ttk.Frame(main_frame)
         pwd_frame1.pack(pady=5)
         password_entry = ttk.Entry(pwd_frame1, show="*", width=30)
@@ -955,7 +891,7 @@ class MainWindow:
         ttk.Button(pwd_frame1, text="👁", width=3,
                    command=lambda: password_entry.config(show="" if show1.get() else "*")).pack(side=tk.LEFT, padx=(5, 0))
         show1.trace_add("write", lambda *args: password_entry.config(show="" if show1.get() else "*"))
-        ttk.Label(main_frame, text="Confirm Password: ").pack(pady=5)
+        ttk.Label(main_frame, text="Повторите пароль: ").pack(pady=5)
         pwd_frame2 = ttk.Frame(main_frame)
         pwd_frame2.pack(pady=5)
         confirm_entry = ttk.Entry(pwd_frame2, show="*", width=30)
@@ -971,21 +907,21 @@ class MainWindow:
             pwd = password_entry.get()
             conf = confirm_entry.get()
             if not pwd:
-                error_label.config(text="Please enter a password")
+                error_label.config(text="Пожалуйста, введите пароль")
                 return
             if pwd != conf:
-                error_label.config(text="Passwords do not match")
+                error_label.config(text="Пароли не совпадают")
                 return
             if len(pwd) < 8:
-                error_label.config(text="Password must be at least 8 characters")
+                error_label.config(text="Пароль должен содержать как минимум 8 символов")
                 return
             from Crypts_man.src.core.vault.password_generator import PasswordGenerator
             pg = PasswordGenerator()
             strength = pg.estimate_strength(pwd)
             if strength['score'] < 2:
-                if not messagebox.askyesno("Weak Password",
-                                             f"Your password is {strength['rating']}.\n\n"
-                                             f"Continue anyway?"):
+                if not messagebox.askyesno("Слабый пароль",
+                                             f"Ваш пароль {strength['rating']}.\n\n"
+                                             f"это не безопасно, вы уверены?"):
                     return
             from Crypts_man.src.core.key_manager import KeyManager
             km = KeyManager(self.config)
@@ -996,7 +932,7 @@ class MainWindow:
             self.db.store_key_params(auth_res['params'])
             parent.destroy()
             self._show_login()
-        ttk.Button(main_frame, text="Create Vault", command=do_setup).pack(pady=10)
+        ttk.Button(main_frame, text="Создать хранилище", command=do_setup).pack(pady=10)
 
 
     def _lock_vault(self):
@@ -1021,7 +957,7 @@ class MainWindow:
             return
         try:
             category = self.category_filter.get()
-            if category == "All":
+            if category in ["All", "Всё", "Все"]:
                 category = None
             search = self.search_var.get().strip() or None
             entries = self.entry_manager.get_all_entries_metadata(search=search, category=category)
@@ -1071,17 +1007,17 @@ class MainWindow:
         form_frame.pack(fill=tk.BOTH, expand=True)
         fields = {}
         row = 0
-        ttk.Label(form_frame, text="Title*: ", foreground="black").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Название записи*: ", foreground="black").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
         row += 1
-        ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Логин: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['username'] = username_entry
         row += 1
-        ttk.Label(form_frame, text="Password*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Пароль*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=25)
@@ -1119,7 +1055,7 @@ class MainWindow:
                 password_entry.insert(0, pwd)
                 update_strength()
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
-        ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(pwd_frame, text="Генератор", command=generate_and_set).pack(side=tk.RIGHT, padx=(5, 0))
         fields['password'] = password_entry
         row += 2
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
@@ -1127,18 +1063,18 @@ class MainWindow:
         url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['url'] = url_entry
         row += 1
-        ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Категория: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"], width=37,
                                       state="readonly")
         category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['category'] = category_combo
         row += 1
-        ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Тэги: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['tags'] = tags_entry
         row += 1
-        ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Заметки: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['notes'] = notes_text
@@ -1204,22 +1140,21 @@ class MainWindow:
                 messagebox.showerror("Error", f"Failed to save entry: {e}")
         button_frame = ttk.Frame(scrollable_frame)
         button_frame.pack(fill=tk.X, pady=10)
-        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Сохранить", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Отмена", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
+
 
 
     def _edit_entry(self):
         """Edit selected entry"""
         if not self._vault_ready or not self.entry_manager:
-            messagebox.showwarning("Locked", "Please unlock the vault first")
+            messagebox.showwarning("Заблокированно", "Please unlock the vault first")
             return
         selected = self.table.get_selected_row()
         if not selected:
-            messagebox.showinfo("Info", "Please select an entry to edit")
+            messagebox.showinfo("Информация", "Please select an entry to edit")
             return
         entry_id = selected.get('id')
         try:
@@ -1231,8 +1166,8 @@ class MainWindow:
             messagebox.showerror("Error", "Entry not found")
             return
         dialog = tk.Toplevel(self.root)
-        dialog.title("Edit Entry")
-        dialog.geometry("550x650")
+        dialog.title("Отредактируйте запись")
+        dialog.geometry("550x550")
         dialog.transient(self.root)
         dialog.grab_set()
         #привязка клавиш для диалога
@@ -1248,19 +1183,19 @@ class MainWindow:
         form_frame.pack(fill=tk.BOTH, expand=True)
         fields = {}
         row = 0
-        ttk.Label(form_frame, text="Title*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Название*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         title_entry = ttk.Entry(form_frame, width=40)
         title_entry.insert(0, entry.get('title', ''))
         title_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['title'] = title_entry
         row += 1
-        ttk.Label(form_frame, text="Username: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Логин: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         username_entry = ttk.Entry(form_frame, width=40)
         username_entry.insert(0, entry.get('username', ''))
         username_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['username'] = username_entry
         row += 1
-        ttk.Label(form_frame, text="Password: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Пароль*: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         pwd_frame = ttk.Frame(form_frame)
         pwd_frame.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         password_entry = ttk.Entry(pwd_frame, show="*", width=30)
@@ -1294,7 +1229,7 @@ class MainWindow:
                 password_entry.insert(0, pwd)
                 update_strength()
             PasswordGeneratorDialog(dialog, self.password_generator, set_password)
-        ttk.Button(pwd_frame, text="Generate", command=generate_and_set).pack(side=tk.RIGHT, padx=(2, 0))
+        ttk.Button(pwd_frame, text="Генератор", command=generate_and_set).pack(side=tk.RIGHT, padx=(2, 0))
         fields['password'] = password_entry
         row += 1
         ttk.Label(form_frame, text="URL: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
@@ -1303,20 +1238,20 @@ class MainWindow:
         url_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['url'] = url_entry
         row += 1
-        ttk.Label(form_frame, text="Category: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Категория: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         category_combo = ttk.Combobox(form_frame, values=["Work", "Personal", "Finance", "Social", "Other"],
                                       width=37, state="readonly")
         category_combo.set(entry.get('category', ''))
         category_combo.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['category'] = category_combo
         row += 1
-        ttk.Label(form_frame, text="Tags: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Тэги: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         tags_entry = ttk.Entry(form_frame, width=40)
         tags_entry.insert(0, entry.get('tags', ''))
         tags_entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
         fields['tags'] = tags_entry
         row += 1
-        ttk.Label(form_frame, text="Notes: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(form_frame, text="Заметки: ").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
         notes_text = tk.Text(form_frame, height=5, width=40)
         notes_text.insert(1.0, entry.get('notes', ''))
         notes_text.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=5)
@@ -1376,12 +1311,10 @@ class MainWindow:
                 messagebox.showerror("Error", f"Update failed: {e}")
         button_frame = ttk.Frame(scrollable_frame)
         button_frame.pack(fill=tk.X, pady=10)
-        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Сохранить", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Отмена", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
 
 
     def _delete_entry(self):
@@ -1515,17 +1448,15 @@ class MainWindow:
         try:
             from Crypts_man.src.core.import_export.exporter import VaultExporter, ExportOptions
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ExportDialog
-            from Crypts_man.src.gui.themes import apply_theme
+            #from Crypts_man.src.gui.themes import apply_theme
             exporter = VaultExporter(self.entry_manager, self.auth_manager, self.audit_logger)
             dialog = ExportDialog(self.root, self.db, self.auth_manager, self.entry_manager, exporter)
-            apply_theme(dialog, self.current_theme)
+            #apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open export dialog: {e}")
             import traceback
             traceback.print_exc()
 
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
 
 
     def _show_import_dialog(self):
@@ -1535,16 +1466,15 @@ class MainWindow:
         try:
             from Crypts_man.src.core.import_export.importer import VaultImporter, ImportOptions
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ImportDialog
-            from Crypts_man.src.gui.themes import apply_theme
+            #from Crypts_man.src.gui.themes import apply_theme
             importer = VaultImporter(self.entry_manager, self.audit_logger)
             dialog = ImportDialog(self.root, self.db, self.auth_manager, importer)
-            apply_theme(dialog, self.current_theme)
+            #apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open import dialog: {e}")
             import traceback
             traceback.print_exc()
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
+
 
 
     def _show_share_dialog(self):
@@ -1559,29 +1489,28 @@ class MainWindow:
             from Crypts_man.src.core.import_export.sharing_service import SharingService, ShareOptions
             from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService, QRCodeService
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ShareDialog
-            from Crypts_man.src.gui.themes import apply_theme
+            #from Crypts_man.src.gui.themes import apply_theme
             sharing_service = SharingService(self.db, self.entry_manager, self.audit_logger)
             key_exchange = KeyExchangeService()
             qr_service = QRCodeService()
             dialog = ShareDialog(self.root, self.db, self.entry_manager, sharing_service,
-                                 key_exchange, qr_service, str(selected.get('id')))  # ← ИЗМЕНИТЬ
-            apply_theme(dialog, self.current_theme)
+                                 key_exchange, qr_service, str(selected.get('id')))
+            #apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open share dialog: {e}")
             import traceback
             traceback.print_exc()
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
 
 
+#Корзина
     def _show_contacts_dialog(self):
         try:
             from Crypts_man.src.core.import_export.key_exchange import KeyExchangeService
             from Crypts_man.src.gui.dialogs.import_export_dialogs import ContactsDialog
-            from Crypts_man.src.gui.themes import apply_theme
+            #from Crypts_man.src.gui.themes import apply_theme
             key_exchange = KeyExchangeService()
             dialog = ContactsDialog(self.root, self.db, key_exchange)
-            apply_theme(dialog, self.current_theme)
+            #apply_theme(dialog, self.current_theme)
         except ImportError as e:
             messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
             import traceback
@@ -1594,8 +1523,6 @@ class MainWindow:
                 ContactsDialog(self.root, self.db, key_exchange)
             except ImportError as e:
                 messagebox.showerror("Error", f"Could not open contacts dialog: {e}")
-        from src.gui.themes import apply_theme
-        apply_theme(dialog, self.current_theme)
 
 
     def _quit(self):
@@ -1612,9 +1539,8 @@ class MainWindow:
         if not self.clipboard:
             messagebox.showwarning("Not Ready", "Clipboard service not initialized")
             return
-        from Crypts_man.src.gui.themes import apply_theme
         dialog = ClipboardSettingsDialog(self.root, self.clipboard, self.config)
-        apply_theme(dialog, self.current_theme)
+
 
 
     def _clear_clipboard_manually(self):
@@ -1717,4 +1643,5 @@ class MainWindow:
 
     def run(self):
         """Run the main application"""
+        self._set_window_icon()
         self.root.mainloop()

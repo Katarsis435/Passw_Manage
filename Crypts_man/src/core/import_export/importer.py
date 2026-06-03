@@ -101,7 +101,7 @@ class VaultImporter:
         if options.mode == "replace":
             planned_create = list(sanitized)
         else:
-            existing_keys = {(e.get("title", ""), e.get("username", ""), e.get("url", "")) for e in existing}
+            existing_keys = {(e.get("ХУЙ", ""), e.get("username", ""), e.get("url", "")) for e in existing}
             planned_create = []
             for e in sanitized:
                 key = (e.get("title", ""), e.get("username", ""), e.get("url", ""))

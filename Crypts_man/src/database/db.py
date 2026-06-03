@@ -188,6 +188,8 @@ class Database:
                   last_used_at TIMESTAMP
               )
           """)
+        #уникальный индекс для deleted_entries, чтобы не было дублей
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_deleted_original_id ON deleted_entries(original_id)")
         conn.commit()
 
 

@@ -115,7 +115,7 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # Ставим зависимости
-pip install -r requirements.txt
+pip install -r requirements.txt.txt
 
 # Windows (рекомендуется):
 pip install pywin32

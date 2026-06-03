@@ -16,11 +16,11 @@ class SecureTable(ttk.Frame):
             self.columns = [
                 ("favorite", "⭐", 40, True),
                 ("id", "ID", 0, False),  # hidden
-                ("title", "Title", 200, True),
-                ("username", "Username", 150, True),
+                ("title", "Название записи", 200, True),
+                ("username", "Логин", 150, True),
                 ("url", "URL", 200, True),
-                ("updated_at", "Last Modified", 150, True),
-                ("category", "Category", 100, True)
+                ("updated_at", "Последнее изменение", 150, True),
+                ("category", "Категория", 100, True)
             ]
         else:
             self.columns = columns

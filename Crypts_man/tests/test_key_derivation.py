@@ -204,7 +204,7 @@ class TestPasswordStrength(unittest.TestCase):
         self.assertLess(len(weak_password), 12)
 
     def test_password_complexity(self):
-        """Test password character variety requirements"""
+        """Test password character variety requirements.txt"""
         # Missing uppercase
         self.assertFalse(any(c.isupper() for c in "lowercase123!"))
         # Missing lowercase

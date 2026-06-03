@@ -112,7 +112,7 @@ class QRViewerDialog(tk.Toplevel):
 class ExportDialog(tk.Toplevel):
     def __init__(self, master, db, auth, entry_manager, exporter):
         super().__init__(master)
-        self.title("Vault Export")
+        self.title("Экспорт хранилища")
         self.geometry("900x620")
         self.minsize(800, 560)
         self.db = db
@@ -349,9 +349,11 @@ class ExportDialog(tk.Toplevel):
 class ImportDialog(tk.Toplevel):
     def __init__(self, master, db, auth, importer):
         super().__init__(master)
-        self.title("Vault Import")
+        self.title("Испорт хранилища")
         self.geometry("1020x760")
         self.minsize(940, 700)
+        self.grab_set()
+        self.lift()
         self.db = db
         self.auth = auth
         self.importer = importer
@@ -374,8 +376,9 @@ class ImportDialog(tk.Toplevel):
         self.format_var = tk.StringVar(value="")
         self.mode_var = tk.StringVar(value="merge")
         self.dup_var = tk.StringVar(value="skip")
-        ttk.Button(top, text="Choose File", command=self._choose_file).pack(side="left")
-        ttk.Label(top, text="Format").pack(side="left", padx=(12, 4))
+        # Кнопка выбора файла
+        ttk.Button(top, text="📁Выбрать файл", command=self._choose_file).pack(side="left")
+        ttk.Label(top, text="Формат").pack(side="left", padx=(12, 4))
         format_box = ttk.Combobox(
             top, textvariable=self.format_var,
             values=["", "encrypted_json", "csv", "bitwarden_json", "lastpass_csv"],
@@ -383,68 +386,84 @@ class ImportDialog(tk.Toplevel):
         )
         format_box.pack(side="left")
         format_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-        ttk.Label(top, text="Mode").pack(side="left", padx=(12, 4))
+        ttk.Label(top, text="Режим").pack(side="left", padx=(12, 4))
         mode_box = ttk.Combobox(top, textvariable=self.mode_var, values=["merge", "replace"],
                                 width=12, state="readonly")
         mode_box.pack(side="left")
         mode_box.bind("<<ComboboxSelected>>", lambda e: self._update_help())
-        ttk.Label(top, text="Duplicates").pack(side="left", padx=(12, 4))
-        ttk.Combobox(top, textvariable=self.dup_var, values=["skip"], width=12, state="readonly").pack(side="left")
+        ttk.Label(top, text="Дубликаты").pack(side="left", padx=(12, 4))
+        ttk.Combobox(top, textvariable=self.dup_var, values=["пропустить"], width=12, state="readonly").pack(side="left")
+        # Поле для пароля
         pw_frame = ttk.Frame(left)
         pw_frame.pack(fill="x", pady=(10, 0))
-        ttk.Label(pw_frame, text="Import / export password (for encrypted native JSON)").pack(anchor="w")
+        ttk.Label(pw_frame, text="Пароль импорта/экспорта (для зашифрованного JSON)").pack(anchor="w")
         self.password_entry = ttk.Entry(pw_frame, show="*")
         self.password_entry.pack(fill="x")
-        self.password_entry.insert(0, "test")
-        print(f"Password entry created: {self.password_entry}")
-        ttk.Label(left, text="Preview / Summary", font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(10, 0))
-        self.preview = tk.Text(left, wrap="word")
+        self.password_entry.insert(0, "")
+        # Предпросмотр
+        ttk.Label(left, text="Предпросмотр / Сводка", font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(10, 0))
+        self.preview = tk.Text(left, wrap="word", state='disabled')
         self.preview.pack(fill="both", expand=True)
-        ttk.Label(right, text="Help", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
-        self.help_text = tk.Text(right, wrap="word", height=18)
+
+        # Помощь (ТОЛЬКО ДЛЯ ЧТЕНИЯ)
+        ttk.Label(right, text="Помощь", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+        self.help_text = tk.Text(right, wrap="word", height=18, state='disabled')
         self.help_text.pack(fill="x", expand=False)
-        tips = ttk.LabelFrame(right, text="What to choose")
+
+        # Подсказки (Label — он и так readonly)
+        tips = ttk.LabelFrame(right, text="Что выбрать")
         tips.pack(fill="x", pady=(10, 0))
         ttk.Label(tips, text=(
-            "• encrypted_json — if exported from CryptoSafe Manager\n"
-            "• csv — for simple table files\n"
-            "• bitwarden_json — if exported from Bitwarden\n"
-            "• lastpass_csv — if exported from LastPass\n"
-            "• merge — safer for normal import\n"
-            "• replace — only if you want to completely replace the vault"
+            "• encrypted_json — если экспортировано из CryptoSafe Manager;\n"
+            "• csv — для простых табличных файлов;\n"
+            "• bitwarden_json — если экспортировано из Bitwarden;\n"
+            "• lastpass_csv — если экспортировано из LastPass;\n"
+            "• merge (слияние) — безопаснее для обычного импорта;\n"
+            "• replace (замена) — только если нужно полностью заменить хранилище."
         ), justify="left").pack(anchor="w", padx=10, pady=8)
+        # Кнопки внизу
         bottom = ttk.Frame(root)
         bottom.pack(fill="x", pady=(12, 0))
-        ttk.Button(bottom, text="Dry Run", command=self._dry_run).pack(side="left")
-        ttk.Button(bottom, text="Import", command=self._import).pack(side="right")
-        ttk.Button(bottom, text="Close", command=self.destroy).pack(side="right", padx=(0, 8))
-
+        ttk.Button(bottom, text="Предпросмотр", command=self._dry_run).pack(side="left")
+        ttk.Button(bottom, text="Импорт", command=self._import).pack(side="right")
+        ttk.Button(bottom, text="Закрыть", command=self.destroy).pack(side="right", padx=(0, 8))
 
     def _update_help(self):
         fmt = self.format_var.get()
         mode = self.mode_var.get()
 
-        notes = ["Format:"]
+        notes = ["Формат:"]
         if fmt == "encrypted_json":
-            notes.append("Encrypted JSON — native CryptoSafe Manager format.")
+            notes.append("Encrypted JSON — родной формат CryptoSafe Manager.")
         elif fmt == "csv":
-            notes.append("CSV — simple table format.")
+            notes.append("CSV — простой табличный формат.")
         elif fmt == "bitwarden_json":
-            notes.append("Bitwarden JSON — for Bitwarden exports.")
+            notes.append("Bitwarden JSON — для экспорта из Bitwarden.")
         elif fmt == "lastpass_csv":
-            notes.append("LastPass CSV — for LastPass exports.")
+            notes.append("LastPass CSV — для экспорта из LastPass.")
         else:
-            notes.append("Auto-detection — will try to detect format automatically.")
+            notes.append("Автоопределение — формат будет определён автоматически.")
 
-        notes.extend(["", "Mode:", IMPORT_MODE_HELP.get(mode, ""), "", "Notes:"])
+        notes.extend(["", "Режим:"])
+        if mode == "merge":
+            notes.append("Слияние — добавить новые записи в текущее хранилище.")
+        elif mode == "replace":
+            notes.append("Замена — очистить текущее хранилище и загрузить импорт.")
+        else:
+            notes.append("Неизвестно")
+
+        notes.extend(["", "Примечания:"])
 
         if fmt == "encrypted_json":
-            notes.append("- If the file is password-protected, enter the export password above.")
+            notes.append("- Если файл защищён паролем, введите пароль экспорта выше.")
         if mode == "replace":
-            notes.append("- All current entries will be deleted before import.")
+            notes.append("- Все текущие записи будут удалены перед импортом.")
 
+        # Временно включаем редактирование для обновления
+        self.help_text.config(state='normal')
         self.help_text.delete("1.0", "end")
         self.help_text.insert("1.0", "\n".join(notes))
+        self.help_text.config(state='disabled')  # Снова делаем readonly
 
 
     def _choose_file(self):
