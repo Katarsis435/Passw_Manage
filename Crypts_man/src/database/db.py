@@ -189,7 +189,9 @@ class Database:
               )
           """)
         #уникальный индекс для deleted_entries, чтобы не было дублей
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_deleted_original_id ON deleted_entries(original_id)")
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='deleted_entries'")
+        if cursor.fetchone():
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_deleted_original_id ON deleted_entries(original_id)")
         conn.commit()
 
 
